@@ -26,7 +26,7 @@ function fit() {
 }
 addEventListener('resize', fit); fit();
 
-const WATER = 14, G = 900, JV = 380, CUT = 0.42, PX = 55, CAMY0 = -H * 0.55;
+const SPEED = 120, WATER = 14, G = 900, JV = 380, CUT = 0.42, PX = 55, CAMY0 = -H * 0.55;
 let best = 0; try { best = +localStorage.getItem('frog_best') || 0; } catch (e) {}
 const R = (a, c) => a + Math.random() * (c - a);
 const RI = (a, c) => Math.floor(R(a, c + 1));
@@ -53,7 +53,7 @@ function reset() {
   plats = [{ ground: true, x: -300, w: 400, y: 0, L: 0 }];
   p = { x: 0, y: 0, vy: 0, on: true, buf: 0, coy: 0, sqx: 0, sqv: 0, stretch: 0, pl: 0, rot: 0 };
   camX = -PX; camY = CAMY0; refY = 0; lastEnd = 100; lastY = 0;
-  speed = 100; t = 0; score = 0; dead = false; deadT = 0; jumps = 0; parts = []; shake = 0;
+  speed = SPEED; t = 0; score = 0; dead = false; deadT = 0; jumps = 0; parts = []; shake = 0;
   fish = [];
   const cols = ['#ff9a3c', '#ffd84a', '#ff6f61', '#f2f2f2'];
   for (let i = 0; i < 9; i++) fish.push({ x: camX + R(0, W + 150), y: 0, dy: R(16, 70), d: Math.random() < .5 ? -1 : 1, v: R(10, 28), s: R(.8, 1.3), c: cols[i % 4], ph: R(0, 6) });
@@ -62,11 +62,11 @@ function reset() {
 function gen() {
   while (lastEnd < camX + W + 250) {
     const lvl = Math.min(t / 60, 1);
-    const rise = plats.length < 4 ? R(-4, 14) : R(-26, 46);
-    let gap = 12 + speed * R(0.14, 0.36);
+    const rise = plats.length < 4 ? R(-4, 14) : R(-48, 52);
+    let gap = 8 + speed * R(0.06, 0.55);
     if (rise > 0) gap *= Math.max(0.55, 1 - rise / 70);
     const y = Math.min(lastY - rise, -6);
-    const w = Math.max(30, 66 - 32 * lvl - R(0, 10));
+    const w = R(30, 70);
     const x = lastEnd + gap;
     plats.push({ x, w, y, L: y, ph: R(0, 6), dip: 0, fl: Math.random() < .3 ? (Math.random() < .5 ? -1 : 1) : 0 });
     lastEnd = x + w; lastY = y;
@@ -122,7 +122,7 @@ function update(dt) {
   stepFish(dt); stepParts(dt);
   if (dead) { deadT += dt; shake = Math.max(0, shake - dt * 20); p.y += 40 * dt; stepFrogAnim(dt); return; }
   t += dt;
-  speed = Math.min(230, 100 + t * 3);
+  speed = SPEED;
   for (const s of plats) {
     if (s.ground) continue;
     const onIt = p.on && p.x > s.x - 2 && p.x < s.x + s.w + 2;
