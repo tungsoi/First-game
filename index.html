@@ -51,13 +51,13 @@ const mix = (a, c, k) => `rgb(${rnd(lerp(a[0], c[0], k))},${rnd(lerp(a[1], c[1],
 const hash = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >> 13)) * 1274126177 | 0; return ((h ^ (h >> 16)) >>> 0) / 4294967296; };
 
 // ---- game state ----
-let plats, fish, p, camX, camY, refY, lastEnd, lastY, speed, t, clock = 0, score, dead, deadT, jumps, parts, shake;
+let state = 'play', plats, fish, p, camX, camY, refY, lastEnd, lastY, speed, t, clock = 0, score, dead, deadT, jumps, parts, shake;
 
 function reset() {
   plats = [{ ground: true, x: -300, w: 400, y: 0, L: 0 }];
   p = { x: 0, y: 0, vy: 0, on: true, buf: 0, coy: 0, sqx: 0, sqv: 0, stretch: 0, pl: 0, rot: 0 };
   camX = -PX; camY = CAMY0; refY = 0; lastEnd = 100; lastY = 0;
-  speed = SPEED; t = 0; score = 0; dead = false; deadT = 0; jumps = 0; parts = []; shake = 0;
+  state = 'play'; speed = SPEED; t = 0; score = 0; dead = false; deadT = 0; jumps = 0; parts = []; shake = 0;
   fish = [];
   const cols = ['#ff9a3c', '#ffd84a', '#ff6f61', '#f2f2f2'];
   for (let i = 0; i < 9; i++) fish.push({ x: camX + R(0, W + 150), y: 0, dy: R(16, 70), d: Math.random() < .5 ? -1 : 1, v: R(10, 28), s: R(.8, 1.3), c: cols[i % 4], ph: R(0, 6) });
@@ -80,9 +80,18 @@ function waterAt(x) { return x < 100 ? 9999 : WATER; }
 function puff(x, y, n, c) { for (let i = 0; i < n; i++) parts.push({ x, y, vx: R(-55, 55), vy: -R(30, 130), t: .6, c }); }
 
 // ---- input ----
+function btnRect() {
+  return state === 'menu' ? { x: W - 120, y: Math.round(H * 1.1) + 40, w: 240, h: 60 } : { x: W - 120, y: 440 + (H - 350) - 30, w: 240, h: 60 };
+}
+function hitBtn(e) {
+  if (e.clientX === undefined) return true; // keyboard
+  const r = cv.getBoundingClientRect(), hx = (e.clientX - r.left) / r.width * W * 2, hy = (e.clientY - r.top) / r.height * H * 2, B = btnRect();
+  return hx >= B.x - 12 && hx <= B.x + B.w + 12 && hy >= B.y - 12 && hy <= B.y + B.h + 12;
+}
 function press(e) {
   if (e && e.preventDefault) e.preventDefault();
-  if (dead) { if (deadT > 0.5) reset(); return; }
+  if (state === 'menu') { if (hitBtn(e)) { state = 'play'; p.buf = 0; } return; }
+  if (dead) { if (deadT > 0.5 && hitBtn(e)) reset(); return; }
   p.buf = 0.12;
 }
 function release(e) {
@@ -124,6 +133,7 @@ function stepFrogAnim(dt) {
 function update(dt) {
   clock += dt;
   stepFish(dt); stepParts(dt);
+  if (state === 'menu') { stepFrogAnim(dt); return; }
   if (dead) { deadT += dt; shake = Math.max(0, shake - dt * 20); p.y += 40 * dt; stepFrogAnim(dt); return; }
   t += dt;
   speed = SPEED;
@@ -348,26 +358,43 @@ function draw() {
   ctx.save(); ctx.scale(u, u);
   const T = (s, x, y) => { ctx.strokeText(s, x, y); ctx.fillText(s, x, y); };
   ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 6; ctx.lineJoin = 'round';
-  ctx.font = 'bold 40px "Courier New",monospace'; T(score + ' m', W, 56);
+  if (state !== 'menu') { ctx.font = 'bold 40px "Courier New",monospace'; T(score + ' m', W, 56); }
   ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'left'; ctx.lineWidth = 4; T('BEST ' + best + ' m', 12, 22);
   ctx.textAlign = 'center';
-  if (!dead && jumps < 4) {
+  if (state === 'play' && !dead && jumps < 4) {
     ctx.font = 'bold 16px "Courier New",monospace';
     T('Chạm để nhảy – giữ lâu nhảy cao hơn', W, H * 2 - 70); T('Leo lên những cuống sen cao dần!', W, H * 2 - 46);
   }
+  const button = label => {
+    const B = btnRect();
+    ctx.fillStyle = '#1b3a4b'; ctx.fillRect(B.x + 4, B.y + 6, B.w, B.h);
+    ctx.fillStyle = '#ffd84a'; ctx.fillRect(B.x, B.y, B.w, B.h);
+    ctx.fillStyle = '#fff3a8'; ctx.fillRect(B.x + 4, B.y + 4, B.w - 8, 6);
+    ctx.fillStyle = '#e0a82a'; ctx.fillRect(B.x + 4, B.y + B.h - 10, B.w - 8, 6);
+    ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 4; ctx.strokeRect(B.x, B.y, B.w, B.h);
+    ctx.fillStyle = '#1b3a4b'; ctx.font = 'bold 26px "Courier New",monospace'; ctx.textAlign = 'center'; ctx.fillText(label, B.x + B.w / 2, B.y + B.h / 2 + 9);
+  };
+  if (state === 'menu') {
+    ctx.fillStyle = 'rgba(10,30,50,.35)'; ctx.fillRect(0, 0, W * 2, H * 2);
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 8;
+    ctx.font = 'bold 54px "Courier New",monospace'; T('ẾCH', W, H - 110); T('NHẢY SEN', W, H - 50);
+    ctx.font = 'bold 15px "Courier New",monospace'; ctx.lineWidth = 5; T('Leo thật cao trên những cuống sen', W, H - 10);
+    button('▶ BẮT ĐẦU');
+  }
   if (dead) {
-    ctx.fillStyle = 'rgba(10,30,50,.45)'; ctx.fillRect(0, 0, W * 2, H * 2); ctx.translate(0, H - 350);
-    ctx.fillStyle = '#fff'; ctx.lineWidth = 6;
+    ctx.fillStyle = 'rgba(10,30,50,.45)'; ctx.fillRect(0, 0, W * 2, H * 2); ctx.save(); ctx.translate(0, H - 350);
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 6;
     ctx.font = 'bold 32px "Courier New",monospace'; T('TÕM! 💦', W, 270);
     ctx.font = 'bold 34px "Courier New",monospace'; T(score + ' m', W, 330);
     ctx.font = 'bold 18px "Courier New",monospace'; T((score >= best && score > 0 ? '🏆 KỶ LỤC MỚI! ' : '') + 'BEST ' + best + ' m', W, 366);
-    if (deadT > 0.5) { ctx.font = 'bold 22px "Courier New",monospace'; T('Chạm để chơi lại', W, 430); }
+    ctx.restore();
+    if (deadT > 0.5) button('↻ CHƠI LẠI');
   }
   ctx.restore();
 }
 function hex2(c) { const m = c.match(/\d+/g).map(Number); return m; }
 
-reset();
+reset(); state = 'menu';
 let lt = performance.now(), acc = 0;
 const STEP = 1 / 120;
 function loop(n) {
