@@ -6,7 +6,7 @@
 <title>Chỉ Lên</title>
 <style>
   html,body{margin:0;height:100%;background:#bfe6ff;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;font-family:system-ui,sans-serif}
-  canvas{display:block;margin:0 auto;height:100%;max-width:100%}
+  canvas{display:block;margin:0 auto}
 </style>
 </head>
 <body>
@@ -19,177 +19,151 @@ function fit() {
   const h = innerHeight, w = Math.min(innerWidth, h * W / H);
   cv.style.width = w + 'px'; cv.style.height = (w * H / W) + 'px';
   cv.width = W * dpr; cv.height = H * dpr;
-  ctx.setTransform(dpr * 1, 0, 0, dpr * 1, 0, 0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 addEventListener('resize', fit); fit();
 
-const G = 1800, MAXV = 950, MINV = 380, CHARGE_T = 0.9;
+const G = 1800, JV = 760, CUT = 0.42, PX = 110;
 let best = 0; try { best = +localStorage.getItem('onlyup_best') || 0; } catch (e) {}
+const R = (a, b) => a + Math.random() * (b - a);
 
-let plats, p, camY, charge, holding, ax, startX, topGen, maxH, msg, msgT, shake, parts;
+let plats, p, camX, camY, refY, topX, lastY, speed, t, score, dead, deadT, jumps, parts, shake, msg, msgT;
 
 function reset() {
-  plats = [{ x: 0, y: 0, w: W, h: 40, cp: true }];
-  topGen = 0;
-  p = { x: W / 2, y: 0, vx: 0, vy: 0, on: true, face: 1, sq: 0 };
-  camY = 0; charge = 0; holding = false; ax = 0; startX = 0; maxH = 0; msg = ''; msgT = 0; shake = 0; parts = [];
-  gen(900);
+  plats = [{ x: -300, y: 0, w: 900, h: 30, ground: true }];
+  p = { x: 0, y: 0, vy: 0, on: true, sq: 0, coy: 0, buf: 0, run: 0, face: 1 };
+  camX = -PX; camY = -H * 0.62; refY = 0; topX = 600; lastY = 0;
+  speed = 180; t = 0; score = 0; dead = false; deadT = 0; jumps = 0; parts = []; shake = 0; msg = ''; msgT = 0;
+  gen();
 }
-function gen(upTo) {
-  while (topGen > -upTo) {
-    const n = plats.length;
-    const last = plats[plats.length - 1];
-    const lvl = Math.min(-topGen / 6000, 1);
-    let dy = 80 + Math.random() * (50 + 40 * lvl);
-    const w = 110 - 50 * lvl - Math.random() * 20;
-    topGen -= dy;
-    const lc = last.x + last.w / 2;
-    let cx = lc + (Math.random() * 2 - 1) * 190;
-    cx = Math.max(w / 2 + 10, Math.min(W - w / 2 - 10, cx));
-    const cp = n % 15 === 0;
-    plats.push(cp ? { x: 60, y: topGen, w: W - 120, h: 24, cp: true }
-                  : { x: cx - w / 2, y: topGen, w, h: 22, cp: false });
+function gen() {
+  while (topX < camX + W + 500) {
+    const lvl = Math.min(-lastY / 4000, 1);
+    const gap = 25 + speed * R(0.2, 0.46);
+    const w = 150 - 75 * lvl - R(0, 25);
+    let y = lastY - R(-40, 90);
+    y = Math.min(y, -30);
+    topX += gap;
+    plats.push({ x: topX, y, w, h: 22, cp: false });
+    topX += w; lastY = y;
   }
 }
-function say(t) { msg = t; msgT = 1.6; }
-function puff(x, y, n, c) {
-  for (let i = 0; i < n; i++) parts.push({ x, y, vx: (Math.random() - .5) * 200, vy: -Math.random() * 160, t: .5, c });
-}
+function say(s) { msg = s; msgT = 1.2; }
+function puff(x, y, n, c) { for (let i = 0; i < n; i++) parts.push({ x, y, vx: R(-100, 100) - speed * .3, vy: -R(0, 160), t: .5, c }); }
 
-function down(e) {
-  e.preventDefault();
-  if (!p.on) return;
-  startX = e.clientX; ax = e.ax || 0;
-  holding = true;
+function press(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  if (dead) { if (deadT > 0.45) reset(); return; }
+  p.buf = 0.12; p.held = true;
 }
-function move(e) {
-  if (!holding) return;
-  const r = cv.getBoundingClientRect();
-  ax = Math.max(-1, Math.min(1, (e.clientX - startX) / r.width * W / 60));
+function release(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  p.held = false;
+  if (!p.on && p.vy < 0 && p.jumping) { p.vy *= CUT; }
+  p.jumping = false;
 }
-function up(e) {
-  e.preventDefault();
-  if (!holding) return;
-  holding = false;
-  if (p.on) {
-    const k = Math.max(charge, 0.12);
-    const v = MINV + (MAXV - MINV) * k;
-    p.vy = -v; p.vx = ax * (40 + 260 * k); if (Math.abs(ax) > .05) p.face = ax > 0 ? 1 : -1; p.on = false;
-    puff(p.x, p.y, 6, '#fff');
-  }
-  charge = 0;
+function doJump() {
+  p.vy = -JV; p.on = false; p.jumping = true; p.buf = 0; p.coy = 0; jumps++;
+  puff(p.x, p.y, 6, '#fff');
 }
-cv.addEventListener('pointerdown', down);
-addEventListener('pointermove', move);
-addEventListener('pointerup', up);
-addEventListener('pointercancel', up);
-const keys = {};
-function keyAx() { return (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0); }
-addEventListener('keydown', e => {
-  keys[e.code] = true;
-  if (holding) ax = keyAx();
-  else if (!e.repeat && ['Space', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD', 'KeyW'].includes(e.code)) down({ preventDefault() {}, clientX: 0, ax: keyAx() });
-});
-addEventListener('keyup', e => {
-  keys[e.code] = false;
-  if (holding && !keyAx() && !keys.Space && !keys.ArrowUp && !keys.KeyW) up({ preventDefault() {} });
-  else if (holding) ax = keyAx();
-});
+cv.addEventListener('pointerdown', press);
+addEventListener('pointerup', release);
+addEventListener('pointercancel', release);
+addEventListener('keydown', e => { if (!e.repeat && ['Space', 'ArrowUp', 'KeyW'].includes(e.code)) press(e); });
+addEventListener('keyup', e => { if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) release(e); });
 
-let lastCP = 0;
 function update(dt) {
-  if (holding && p.on) charge = Math.min(1, charge + dt / CHARGE_T);
-  if (p.on) {
-    p.vx *= 0.8;
-  } else {
-    const py = p.y;
-    p.vy = Math.min(p.vy + G * dt, 1400);
-    p.x += p.vx * dt; p.y += p.vy * dt;
-    if (p.x < 14) { p.x = 14; p.vx = Math.abs(p.vx) * 0.6; }
-    if (p.x > W - 14) { p.x = W - 14; p.vx = -Math.abs(p.vx) * 0.6; }
-    if (p.vy > 0) {
-      for (const s of plats) {
-        if (py <= s.y + 1 && p.y >= s.y && p.x > s.x - 6 && p.x < s.x + s.w + 6) {
-          p.y = s.y; p.vy = 0; p.vx = 0; p.on = true; p.sq = 1;
-          puff(p.x, p.y, 8, '#ffe28a');
-          if (s.cp && s.y < lastCP) { lastCP = s.y; say('Checkpoint! ⭐'); shake = 4; }
-          break;
-        }
-      }
+  if (dead) { deadT += dt; shake = Math.max(0, shake - dt * 20); stepParts(dt); return; }
+  t += dt;
+  speed = Math.min(360, 180 + t * 4);
+  const py = p.y;
+  p.x += speed * dt;
+  p.buf = Math.max(0, p.buf - dt);
+  p.coy = Math.max(0, p.coy - dt);
+  p.vy = Math.min(p.vy + G * dt, 1400);
+  p.y += p.vy * dt;
+  let landed = null;
+  if (p.vy >= 0) {
+    for (const s of plats) {
+      if (py <= s.y + 2 && p.y >= s.y && p.x > s.x - 4 && p.x < s.x + s.w + 4) { landed = s; break; }
     }
   }
+  if (landed) {
+    if (!p.on) { p.sq = 1; puff(p.x, landed.y, 6, '#ffe28a'); }
+    p.y = landed.y; p.vy = 0; p.on = true; p.coy = 0.1; p.jumping = false; refY = landed.y;
+    const m = Math.floor(-landed.y / 8);
+    if (m > score) score = m;
+  } else if (p.on) {
+    p.on = false; p.coy = 0.1;
+  }
+  if (p.buf > 0 && (p.on || p.coy > 0)) doJump();
   p.sq = Math.max(0, p.sq - dt * 5);
-  const h = Math.max(0, -p.y);
-  if (h > maxH) maxH = h;
-  const m = Math.floor(maxH / 10);
-  if (m > best) { best = m; try { localStorage.setItem('onlyup_best', best); } catch (e) {} }
-  if (!p.on && p.y > maxH * -1 + 0 && -p.y < maxH - 450 && !p.fellSaid) { p.fellSaid = true; say('Ối! Rơi rồi 😵'); }
-  if (p.on) p.fellSaid = false;
-  const target = p.y - H * 0.6;
-  camY += (Math.min(target, 0 - H * 0.6 + 0) - camY) * Math.min(1, dt * 6);
-  gen(-p.y + 900);
-  plats = plats.filter(s => s.y < p.y + 1400 || s.cp);
-  if (plats.length > 200) plats = plats.filter(s => s.y < p.y + 2500);
-  for (const q of parts) { q.t -= dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 600 * dt; }
-  parts = parts.filter(q => q.t > 0);
+  p.run += dt * speed / 22;
+  if (score > best) { best = score; try { localStorage.setItem('onlyup_best', best); } catch (e) {} }
+  camX = p.x - PX;
+  camY += ((refY - H * 0.62) - camY) * Math.min(1, dt * 4);
+  if (p.y > camY + H + 50) { dead = true; deadT = 0; shake = 10; say(''); }
+  gen();
+  plats = plats.filter(s => s.x + s.w > camX - 200);
+  stepParts(dt);
   msgT -= dt; shake = Math.max(0, shake - dt * 20);
 }
+function stepParts(dt) {
+  for (const q of parts) { q.t -= dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 600 * dt; }
+  parts = parts.filter(q => q.t > 0);
+}
+
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); }
+function txt(s, x, y) { ctx.strokeText(s, x, y); ctx.fillText(s, x, y); }
 
 function draw() {
-  const h = Math.max(0, -camY - H * 0.6), cloudA = Math.min(1, h / 400);
-  const t = Math.min(h / 8000, 1);
+  const alt = Math.max(0, -(camY + H * 0.62));
+  const k = Math.min(alt / 8000, 1);
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  const c1 = `hsl(${200 + t * 60},${70 - t * 20}%,${80 - t * 55}%)`;
-  const c2 = `hsl(${190 + t * 70},${60}%,${92 - t * 60}%)`;
-  g.addColorStop(0, c1); g.addColorStop(1, c2);
+  g.addColorStop(0, `hsl(${200 + k * 60},${70 - k * 20}%,${80 - k * 55}%)`);
+  g.addColorStop(1, `hsl(${190 + k * 70},60%,${92 - k * 60}%)`);
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   // clouds (parallax)
-  ctx.fillStyle = `rgba(255,255,255,${.6 * cloudA})`;
-  for (let i = 0; i < 8; i++) {
-    const cy = ((i * 173 - camY * 0.3) % (H + 100) + H + 100) % (H + 100) - 50;
-    const cx = (i * 97) % W;
+  ctx.fillStyle = `rgba(255,255,255,${.6 * Math.min(1, alt / 300)})`;
+  for (let i = 0; i < 7; i++) {
+    const cx = (((i * 157 - camX * 0.25) % (W + 160)) + W + 160) % (W + 160) - 80;
+    const cy = (((i * 211 - camY * 0.3) % (H + 100)) + H + 100) % (H + 100) - 50;
     ctx.beginPath(); ctx.ellipse(cx, cy, 50, 16, 0, 0, 7); ctx.ellipse(cx + 28, cy - 8, 30, 14, 0, 0, 7); ctx.fill();
   }
   ctx.save();
-  if (shake > 0) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
-  ctx.translate(0, -camY);
-  // scenery near the ground
-  ctx.fillStyle = '#8fd48a'; ctx.beginPath(); ctx.ellipse(60, 0, 150, 90, 0, Math.PI, 0); ctx.fill();
-  ctx.fillStyle = '#74c46f'; ctx.beginPath(); ctx.ellipse(340, 0, 130, 60, 0, Math.PI, 0); ctx.fill();
-  for (const tx of [30, 360]) {
-    ctx.fillStyle = '#6b4423'; ctx.fillRect(tx - 6, -50, 12, 50);
-    ctx.fillStyle = '#2f9e44'; ctx.strokeStyle = '#1b5e2a'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(tx, -70, 34, 0, 7); ctx.fill(); ctx.stroke();
-  }
+  if (shake > 0) ctx.translate(R(-.5, .5) * shake, R(-.5, .5) * shake);
+  // hills/trees parallax near ground
+  ctx.save(); ctx.translate(-camX * 0.4, -camY);
+  ctx.fillStyle = '#8fd48a'; ctx.beginPath(); ctx.ellipse(120, 0, 220, 100, 0, Math.PI, 0); ctx.fill();
+  ctx.fillStyle = '#74c46f'; ctx.beginPath(); ctx.ellipse(420, 0, 180, 60, 0, Math.PI, 0); ctx.fill();
+  ctx.restore();
+  ctx.translate(-camX, -camY);
   ctx.lineJoin = 'round'; ctx.lineWidth = 3;
   for (const s of plats) {
-    if (s.y - camY < -60 || s.y - camY > H + 60) continue;
-    if (s.y === 0) {
-      ctx.fillStyle = '#8a5a2b'; ctx.fillRect(0, 0, W, 600);
-      ctx.fillStyle = '#4ccf4a'; ctx.fillRect(0, 0, W, 14);
-      ctx.fillStyle = '#1f7a2a'; ctx.fillRect(0, 14, W, 3);
-      // start sign
-      ctx.fillStyle = '#6b4423'; ctx.fillRect(100 - 3, -40, 6, 40);
-      ctx.fillStyle = '#ffe28a'; ctx.strokeStyle = '#6b4423'; rr(100 - 34, -66, 68, 30, 6); ctx.stroke();
-      ctx.fillStyle = '#6b4423'; ctx.font = 'bold 18px system-ui'; ctx.textAlign = 'center'; ctx.fillText('0 m', 100, -45);
+    if (s.x + s.w < camX - 20 || s.x > camX + W + 20) continue;
+    if (s.ground) {
+      ctx.fillStyle = '#8a5a2b'; ctx.fillRect(s.x, 0, s.w, 1200);
+      ctx.fillStyle = '#4ccf4a'; ctx.fillRect(s.x, 0, s.w, 14);
+      ctx.fillStyle = '#1f7a2a'; ctx.fillRect(s.x, 14, s.w, 3);
+      ctx.fillStyle = '#6b4423'; ctx.fillRect(247, -40, 6, 40);
+      ctx.fillStyle = '#ffe28a'; ctx.strokeStyle = '#6b4423'; rr(216, -66, 68, 30, 6); ctx.stroke();
+      ctx.fillStyle = '#6b4423'; ctx.font = 'bold 18px system-ui'; ctx.textAlign = 'center'; ctx.fillText('0 m', 250, -45);
       continue;
     }
-    ctx.strokeStyle = s.cp ? '#7a4a00' : '#3e2410';
-    ctx.fillStyle = s.cp ? '#f4b942' : '#9a6a38';
+    ctx.strokeStyle = '#3e2410'; ctx.fillStyle = '#9a6a38';
     rr(s.x, s.y, s.w, s.h, 8); ctx.stroke();
-    ctx.fillStyle = s.cp ? '#ffe08a' : '#58d655';
-    ctx.strokeStyle = s.cp ? '#7a4a00' : '#1f7a2a';
+    ctx.fillStyle = '#58d655'; ctx.strokeStyle = '#1f7a2a';
     rr(s.x, s.y, s.w, 9, 5); ctx.stroke();
-    if (s.cp) { ctx.fillStyle = '#6b4423'; ctx.fillRect(s.x + s.w - 22, s.y - 36, 4, 36); ctx.fillStyle = '#e8453c'; ctx.fillRect(s.x + s.w - 18, s.y - 36, 20, 14); }
   }
   for (const q of parts) { ctx.globalAlpha = q.t * 2; ctx.fillStyle = q.c; ctx.fillRect(q.x, q.y, 4, 4); }
   ctx.globalAlpha = 1;
   // player
-  const sq = p.on ? (charge * 0.35 + p.sq * 0.25) : 0;
-  const sx = 1 + sq * 0.6, sy = 1 - sq;
-  ctx.save(); ctx.translate(p.x, p.y);
-  if (!p.on) ctx.rotate(Math.max(-.4, Math.min(.4, p.vx / 500)));
-  ctx.scale(sx, sy);
+  if (!dead) {
+    const sq = p.on ? p.sq * 0.25 : 0;
+    const bob = p.on ? Math.abs(Math.sin(p.run)) * 4 : 0;
+    ctx.save(); ctx.translate(p.x, p.y - bob);
+    if (!p.on) ctx.rotate(Math.max(-.3, Math.min(.3, p.vy / 2500)));
+    ctx.scale(1 + sq * .6, 1 - sq);
   const f = p.face; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = '#5a2d0c';
   // tail
   ctx.beginPath(); ctx.moveTo(-f * 18, -10); ctx.quadraticCurveTo(-f * 40, -14, -f * 34, -38); ctx.lineWidth = 7; ctx.stroke();
@@ -221,40 +195,34 @@ function draw() {
   // feet
   ctx.fillStyle = '#fff3e0'; ctx.strokeStyle = '#5a2d0c'; ctx.lineWidth = 2;
   for (const sd of [-1, 1]) { ctx.beginPath(); ctx.ellipse(sd * 11, -1, 8, 4.5, 0, 0, 7); ctx.fill(); ctx.stroke(); }
-  ctx.restore();
-  // aim arrow
-  if (holding && p.on) {
-    const k = Math.max(charge, .12), v = MINV + (MAXV - MINV) * k, vx = ax * (40 + 260 * k);
-    ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 2;
-    for (let i = 1; i <= 7; i++) {
-      const tt = i * 0.07;
-      ctx.beginPath(); ctx.arc(p.x + vx * tt, p.y - 20 - v * tt + 0.5 * G * tt * tt, 6 - i * .5, 0, 7); ctx.fill(); ctx.stroke();
-    }
+    ctx.restore();
   }
   ctx.restore();
   // HUD
   ctx.textAlign = 'center';
   ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
-  ctx.font = 'bold 40px system-ui'; const cur = Math.floor(Math.max(0, -p.y) / 10);
-  ctx.strokeText(cur + ' m', W / 2, 55); ctx.fillText(cur + ' m', W / 2, 55);
-  ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'left';
-  ctx.strokeText('Kỷ lục: ' + best + ' m', 14, 24); ctx.fillText('Kỷ lục: ' + best + ' m', 14, 24);
-  // charge bar
-  if (holding) { ctx.fillStyle = 'rgba(0,0,0,.3)'; rr(W / 2 - 60, H - 40, 120, 12, 6); ctx.fillStyle = `hsl(${120 - charge * 120},80%,55%)`; rr(W / 2 - 60, H - 40, 120 * charge, 12, 6); }
+  ctx.font = 'bold 40px system-ui'; txt(score + ' m', W / 2, 55);
+  ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'left'; txt('Kỷ lục: ' + best + ' m', 14, 24);
   ctx.textAlign = 'center';
-  if (msgT > 0) { ctx.font = 'bold 26px system-ui'; ctx.globalAlpha = Math.min(1, msgT); ctx.strokeText(msg, W / 2, 110); ctx.fillText(msg, W / 2, 110); ctx.globalAlpha = 1; }
-  if (maxH < 30 && !holding) {
-    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = '#fff';
-    ctx.strokeText('Giữ để nạp lực, kéo ngón tay để chọn hướng', W / 2, H - 70); ctx.fillText('Giữ nửa trái/phải màn hình để nạp lực', W / 2, H - 70);
-    ctx.strokeText('Thả ra để nhảy – càng giữ lâu càng cao!', W / 2, H - 48); ctx.fillText('Thả ra để nhảy – càng giữ lâu càng cao!', W / 2, H - 48);
+  if (!dead && jumps < 4) {
+    ctx.font = 'bold 17px system-ui';
+    txt('Chạm để nhảy – giữ lâu nhảy cao hơn', W / 2, H - 70);
+    txt('Đừng để rơi xuống!', W / 2, H - 46);
+  }
+  if (dead) {
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,.5)';
+    ctx.font = 'bold 44px system-ui'; txt('Ối! Rơi rồi 😵', W / 2, 280);
+    ctx.font = 'bold 30px system-ui'; txt(score + ' m' + (score >= best && score > 0 ? '  🏆 Kỷ lục mới!' : ''), W / 2, 335);
+    ctx.font = 'bold 18px system-ui'; txt('Kỷ lục: ' + best + ' m', W / 2, 370);
+    if (deadT > 0.45) { ctx.font = 'bold 22px system-ui'; txt('Chạm để chơi lại', W / 2, 430); }
   }
 }
-function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); }
 
 reset();
 let lt = performance.now();
 function loop(n) {
-  let dt = Math.min((n - lt) / 1000, 1 / 20); lt = n;
+  const dt = Math.min((n - lt) / 1000, 1 / 20); lt = n;
   update(dt); draw(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
