@@ -26,7 +26,7 @@ function fit() {
 }
 addEventListener('resize', fit); fit();
 
-const G = 900, JV = 380, CUT = 0.42, PX = 55, CAMY0 = -H * 0.55;
+const WATER = 14, G = 900, JV = 380, CUT = 0.42, PX = 55, CAMY0 = -H * 0.55;
 let best = 0; try { best = +localStorage.getItem('frog_best') || 0; } catch (e) {}
 const R = (a, c) => a + Math.random() * (c - a);
 const RI = (a, c) => Math.floor(R(a, c + 1));
@@ -47,13 +47,12 @@ const mix = (a, c, k) => `rgb(${rnd(lerp(a[0], c[0], k))},${rnd(lerp(a[1], c[1],
 const hash = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >> 13)) * 1274126177 | 0; return ((h ^ (h >> 16)) >>> 0) / 4294967296; };
 
 // ---- game state ----
-let plats, tiers, fish, p, camX, camY, refY, lastEnd, curL, leavesLeft, speed, t, clock = 0, score, dead, deadT, jumps, parts, shake;
+let plats, fish, p, camX, camY, refY, lastEnd, lastY, speed, t, clock = 0, score, dead, deadT, jumps, parts, shake;
 
 function reset() {
   plats = [{ ground: true, x: -300, w: 400, y: 0, L: 0 }];
-  tiers = [{ x0: 100, L: 0 }];
   p = { x: 0, y: 0, vy: 0, on: true, buf: 0, coy: 0, sqx: 0, sqv: 0, stretch: 0, pl: 0, rot: 0 };
-  camX = -PX; camY = CAMY0; refY = 0; lastEnd = 100; curL = 0; leavesLeft = 3;
+  camX = -PX; camY = CAMY0; refY = 0; lastEnd = 100; lastY = 0;
   speed = 90; t = 0; score = 0; dead = false; deadT = 0; jumps = 0; parts = []; shake = 0;
   fish = [];
   const cols = ['#ff9a3c', '#ffd84a', '#ff6f61', '#f2f2f2'];
@@ -63,29 +62,17 @@ function reset() {
 function gen() {
   while (lastEnd < camX + W + 250) {
     const lvl = Math.min(t / 90, 1);
+    const rise = plats.length < 4 ? R(-4, 14) : R(-26, 40);
     let gap = 10 + speed * R(0.1, 0.3);
-    if (leavesLeft === 0) {
-      let nl;
-      if (Math.random() < 0.75) { nl = curL - RI(12, 30); gap = 8 + speed * R(0.08, 0.22); }
-      else nl = Math.min(curL + RI(8, 20), 12);
-      tiers.push({ x0: lastEnd + gap * 0.5, L: nl });
-      curL = nl; leavesLeft = RI(2, 5);
-    }
-    const w = Math.max(32, 72 - 30 * lvl - R(0, 12));
+    if (rise > 0) gap *= Math.max(0.55, 1 - rise / 70);
+    const y = Math.min(lastY - rise, -6);
+    const w = Math.max(38, 74 - 30 * lvl - R(0, 12));
     const x = lastEnd + gap;
-    plats.push({ x, w, y: curL, L: curL, ph: R(0, 6), dip: 0, fl: Math.random() < .35 ? (Math.random() < .5 ? -1 : 1) : 0 });
-    lastEnd = x + w; leavesLeft--;
+    plats.push({ x, w, y, L: y, ph: R(0, 6), dip: 0, fl: Math.random() < .3 ? (Math.random() < .5 ? -1 : 1) : 0 });
+    lastEnd = x + w; lastY = y;
   }
 }
-function waterAt(x) {
-  if (x < tiers[0].x0) return 9999;
-  let L = tiers[0].L;
-  for (let i = 0; i < tiers.length; i++) {
-    if (tiers[i].x0 <= x) L = tiers[i].L;
-    if (i > 0 && Math.abs(x - tiers[i].x0) < 4) return Math.min(tiers[i - 1].L, tiers[i].L);
-  }
-  return L;
-}
+function waterAt(x) { return x < 100 ? 9999 : WATER; }
 function puff(x, y, n, c) { for (let i = 0; i < n; i++) parts.push({ x, y, vx: R(-55, 55), vy: -R(30, 130), t: .6, c }); }
 
 // ---- input ----
@@ -118,10 +105,9 @@ function stepParts(dt) {
 function stepFish(dt) {
   for (const f of fish) {
     f.x += f.d * f.v * dt;
-    const ty = waterAt(f.x) + f.dy;
-    f.y = f.y ? lerp(f.y, Math.min(ty, 99999), dt * 2) : Math.min(ty, 99999);
-    if (f.x < camX - 60) { f.x = camX + W + R(20, 150); f.y = 0; f.dy = R(16, 70); }
-    else if (f.x > camX + W + 200) { f.x = camX - R(20, 80); f.y = 0; f.dy = R(16, 70); }
+    f.y = WATER + f.dy;
+    if (f.x < camX - 60) { f.x = camX + W + R(20, 150); f.dy = R(16, 70); }
+    else if (f.x > camX + W + 200) { f.x = camX - R(20, 80); f.dy = R(16, 70); }
   }
 }
 function stepFrogAnim(dt) {
@@ -134,7 +120,7 @@ function stepFrogAnim(dt) {
 function update(dt) {
   clock += dt;
   stepFish(dt); stepParts(dt);
-  if (dead) { deadT += dt; shake = Math.max(0, shake - dt * 20); p.y += 50 * dt; stepFrogAnim(dt); return; }
+  if (dead) { deadT += dt; shake = Math.max(0, shake - dt * 20); p.y += 40 * dt; stepFrogAnim(dt); return; }
   t += dt;
   speed = Math.min(180, 90 + t * 2);
   for (const s of plats) {
@@ -163,11 +149,11 @@ function update(dt) {
   stepFrogAnim(dt);
   if (score > best) { best = score; try { localStorage.setItem('frog_best', best); } catch (e) {} }
   camX = p.x - PX;
-  camY += ((refY + CAMY0) - camY) * Math.min(1, dt * 3.5);
-  if (!p.on && p.y > waterAt(p.x) + 7) { dead = true; deadT = 0; shake = 4; puff(p.x, waterAt(p.x), 12, '#bfefff'); }
+  const lost = !p.on && p.y > refY + 70;
+  camY += (((lost ? p.y : refY) + CAMY0) - camY) * Math.min(1, dt * (lost ? 6 : 3.5));
+  if (!p.on && p.y > WATER + 6) { dead = true; deadT = 0; shake = 4; puff(p.x, WATER, 12, '#bfefff'); }
   gen();
   plats = plats.filter(s => s.x + s.w > camX - 100);
-  while (tiers.length > 2 && tiers[1].x0 < camX - 120) tiers.shift();
   shake = Math.max(0, shake - dt * 20);
 }
 
@@ -215,19 +201,25 @@ const leafCache = {};
 function leafSprite(w, fl) {
   w = rnd(w); const key = w + '_' + fl;
   if (leafCache[key]) return leafCache[key];
-  const c = document.createElement('canvas'); c.width = w + 6; c.height = 18;
-  const g = c.getContext('2d'); const cx = (w + 6) >> 1, cy = 13, rx = w >> 1, ry = 5;
-  pixEllipse(g, cx, cy + 1, rx + 1, ry + 1, 'rgba(20,70,60,.5)'); // soft shadow on water
-  pixEllipse(g, cx, cy, rx, ry, '#1c6b32');
-  pixEllipse(g, cx, cy, rx - 1, ry - 1, '#3fbf5a');
-  pixEllipse(g, cx, cy - 1, rx - 4, Math.max(1, ry - 3), '#6fdc7e');
-  g.fillStyle = '#2c9a48';
-  for (let i = 1; i < 6; i++) { const a = .3 + i * 0.95; for (let r = 3; r < rx - 2; r += 1) g.fillRect(cx + rnd(Math.cos(a) * r), cy + rnd(Math.sin(a) * r * ry / rx), 1, 1); }
-  for (let dx = 0; dx <= rx + 1; dx++) { const h = rnd(dx * 0.22); g.clearRect(cx + dx, cy - h, 1, h * 2 + 1); }
+  const RY = 7;
+  const c = document.createElement('canvas'); c.width = w + 8; c.height = 26;
+  const g = c.getContext('2d'); const cx = (w + 8) >> 1, cy = 18, rx = w >> 1;
+  pixEllipse(g, cx, cy + 2, rx, RY, '#0d4a25');              // thickness / underside
+  pixEllipse(g, cx, cy, rx, RY, '#0f5a2c');                  // outline
+  pixEllipse(g, cx, cy, rx - 1, RY - 1, '#8fe88a');          // bright rim
+  pixEllipse(g, cx, cy + 1, rx - 3, RY - 2, '#38b653');      // body
+  pixEllipse(g, cx - 2, cy - 1, rx - 8, Math.max(2, RY - 4), '#5fd477'); // highlight
+  g.fillStyle = '#1f8a40';                                    // veins
+  for (let i = 0; i < 9; i++) {
+    const a = 0.45 + i * (Math.PI * 2 - 0.9) / 8;
+    for (let r = 2; r < rx - 4; r++) { const x = cx + rnd(Math.cos(a) * r), y = cy + 1 + rnd(Math.sin(a) * r * (RY - 2) / rx); g.fillRect(x, y, 1, 1); }
+  }
+  g.fillStyle = '#ffe28a'; g.fillRect(cx - 1, cy, 3, 2);      // stem joint
+  for (let dx = 1; dx <= rx + 1; dx++) { const h = rnd(dx * 0.2); g.clearRect(cx + dx, cy - h - 1, 1, h * 2 + 3); } // notch
   if (fl) {
-    const fx = cx + rnd(fl * w * 0.28), fy = cy - 1;
-    pixEllipse(g, fx - 3, fy - 3, 1, 3, '#ff9fc4'); pixEllipse(g, fx + 3, fy - 3, 1, 3, '#ff9fc4');
-    pixEllipse(g, fx - 1, fy - 4, 1, 4, '#ffb8d4'); pixEllipse(g, fx + 1, fy - 4, 1, 4, '#ffb8d4'); pixEllipse(g, fx, fy - 5, 1, 5, '#ffd0e4');
+    const fx = cx + rnd(fl * w * 0.28), fy = cy - 2;
+    pixEllipse(g, fx - 4, fy - 3, 1, 3, '#ff7fb0'); pixEllipse(g, fx + 4, fy - 3, 1, 3, '#ff7fb0');
+    pixEllipse(g, fx - 2, fy - 5, 1, 4, '#ff9fc4'); pixEllipse(g, fx + 2, fy - 5, 1, 4, '#ff9fc4'); pixEllipse(g, fx, fy - 6, 1, 6, '#ffc2dc');
     g.fillStyle = '#ffd84a'; g.fillRect(fx - 1, fy - 1, 3, 2);
   }
   return leafCache[key] = c;
@@ -270,54 +262,48 @@ function draw() {
   rect(b, 0, hb, W, H, '#74c46f');
   const cx = rnd(camX), cy = rnd(camY);
   b.translate(-cx, -cy);
-  // water tiers
-  for (let i = 0; i < tiers.length; i++) {
-    const x0 = Math.max(tiers[i].x0, cx - 1), x1 = i + 1 < tiers.length ? Math.min(tiers[i + 1].x0, cx + W + 1) : cx + W + 1;
-    if (x1 <= x0) continue;
-    const L = rnd(tiers[i].L);
-    for (let j = 0; j < 9; j++) rect(b, x0, L + 2 + j * 8, x1 - x0, j === 8 ? H * 3 : 8, mix(WT, WD, Math.min(1, j / 6)));
-    for (let x = rnd(x0); x < x1; x += 3) { const o = Math.round(Math.sin(x * 0.12 + clock * 2.4)); rect(b, x, L + 1 + o, 2, 1, 'rgba(255,255,255,.7)'); }
+  // water
+  if (WATER < cy + H) {
+    const x0 = cx - 1, x1 = cx + W + 1;
+    for (let j = 0; j < 9; j++) rect(b, x0, WATER + 2 + j * 8, x1 - x0, j === 8 ? H * 3 : 8, mix(WT, WD, Math.min(1, j / 6)));
+    for (let x = x0; x < x1; x += 3) { const o = Math.round(Math.sin(x * 0.12 + clock * 2.4)); rect(b, x, WATER + 1 + o, 2, 1, 'rgba(255,255,255,.7)'); }
   }
   for (const fh of fish) drawFish(fh);
-  // bank
+  // stalks (behind leaves)
+  for (const s of plats) {
+    if (s.ground || s.x + s.w < cx - 10 || s.x > cx + W + 10) continue;
+    const sx = s.x + s.w / 2, top = rnd(s.y) + 5, bottom = Math.min(cy + H + 4, WATER + 46);
+    for (let yy = top; yy < bottom; yy++) {
+      const wob = Math.round(Math.sin(clock * 1.6 + s.ph + yy * 0.05) * (1 + (yy - top) / 80));
+      const under = yy > WATER, x = rnd(sx) + wob;
+      b.globalAlpha = under ? Math.max(0.15, 0.7 - (yy - WATER) / 60) : 1;
+      rect(b, x - 1, yy, 3, 1, '#14602f'); rect(b, x, yy, 1, 1, '#4cc468');
+      if ((yy - top) % 23 === 11) rect(b, x + 2, yy, 2, 1, '#14602f');
+    }
+    b.globalAlpha = 1;
+  }
+  // bank (small island)
   if (cx < 100) {
-    rect(b, -300, 0, 400, 600, '#8a5a2b');
-    for (let y = 4; y < 80; y += 3) for (let x = rnd(cx) - 2; x < 100; x += 3) if (hash(x, y) < .12) rect(b, x, y, 2, 1, '#6b4423');
+    rect(b, -300, 0, 400, 40, '#8a5a2b');
+    for (let y = 4; y < 40; y += 3) for (let x = rnd(cx) - 2; x < 100; x += 3) if (hash(x, y) < .14) rect(b, x, y, 2, 1, '#6b4423');
+    rect(b, -300, 36, 400, 4, '#6b4423');
     rect(b, -300, 0, 400, 4, '#58d655'); rect(b, -300, 4, 400, 1, '#1f7a2a');
     for (let x = rnd(cx); x < 100; x += 2) if (hash(x, 1) < .5) rect(b, x, -1, 1, 1, '#58d655');
-    // tree
+    rect(b, 96, 0, 6, 40, '#8a5a2b'); rect(b, 96, 0, 6, 4, '#58d655');
     rect(b, -29, -34, 5, 34, '#6b4423'); pixEllipse(b, -26, -42, 16, 13, '#1b5e2a'); pixEllipse(b, -26, -43, 14, 11, '#2f9e44'); pixEllipse(b, -30, -46, 6, 4, '#4cc464');
-    // flag
     rect(b, 72, -26, 2, 26, '#6b4423'); rect(b, 74, -26, 11, 7, '#e8453c'); rect(b, 74, -19, 8, 2, '#e8453c');
-  }
-  // stone walls + waterfalls
-  for (let i = 1; i < tiers.length; i++) {
-    const bx = rnd(tiers[i].x0), LA = rnd(tiers[i - 1].L), LB = rnd(tiers[i].L), top = Math.min(LA, LB), bot = Math.max(LA, LB);
-    if (bx < cx - 12 || bx > cx + W + 12) continue;
-    for (let y = top; y < top + 600; y += 4) for (let x = bx - 4; x < bx + 4; x += 4) {
-      const h = hash(x + 99, y), col = h < .33 ? '#7d8590' : h < .66 ? '#6a727c' : '#8d95a0';
-      rect(b, x, y, 4, 4, col);
-      if (y === top) rect(b, x, y, 4, 1, '#aab2bc');
-    }
-    rect(b, bx - 4, top, 1, 600, '#4f565f'); rect(b, bx + 3, top, 1, 600, '#4f565f');
-    const wx = LB < LA ? bx - 4 : bx + 0, ph = Math.floor(clock * 40);
-    for (let y = top; y < bot + 1; y++) for (let x = 0; x < 4; x++) {
-      const v = (y + ph + x * 3) % 9;
-      rect(b, wx + x, y, 1, 1, v < 3 ? '#ffffff' : v < 6 ? '#bfefff' : '#7fd3ea');
-    }
-    if (Math.floor(clock * 6) % 2) rect(b, wx - 1, bot - 1, 6, 2, 'rgba(255,255,255,.8)');
   }
   // leaves
   for (const s of plats) {
     if (s.ground || s.x + s.w < cx - 10 || s.x > cx + W + 10) continue;
-    const sp = leafSprite(s.w, s.fl), lx = rnd(s.x + s.w / 2) - (sp.width >> 1), ly = rnd(s.y) - 12;
+    const sp = leafSprite(s.w, s.fl), lx = rnd(s.x + s.w / 2) - (sp.width >> 1), ly = rnd(s.y) - 16;
     const rp = (clock * 0.5 + s.ph) % 1;
-    b.globalAlpha = 1 - rp; rect(b, s.x - 2 - rp * 5, s.L + 3, 3, 1, '#fff'); rect(b, s.x + s.w - 1 + rp * 5, s.L + 3, 3, 1, '#fff'); b.globalAlpha = 1;
+    b.globalAlpha = 1 - rp;  b.globalAlpha = 1;
     b.drawImage(sp, lx, ly);
   }
   for (const q of parts) { b.globalAlpha = Math.min(1, q.t * 2); rect(b, q.x, q.y, 1.5, 1.5, q.c); }
   b.globalAlpha = 1;
-  if (dead) b.globalAlpha = Math.max(0.25, 1 - (p.y - waterAt(p.x) - 6) / 60);
+  if (dead) b.globalAlpha = Math.max(0.25, 1 - (p.y - WATER - 6) / 60);
   b.drawImage(frogSprite(), rnd(p.x) - 24, rnd(p.y) - 42);
   b.globalAlpha = 1;
   b.restore();
@@ -335,7 +321,7 @@ function draw() {
   ctx.textAlign = 'center';
   if (!dead && jumps < 4) {
     ctx.font = 'bold 16px "Courier New",monospace';
-    T('Chạm để nhảy – giữ lâu nhảy cao hơn', 200, 630); T('Leo lên các tầng ao sen!', 200, 654);
+    T('Chạm để nhảy – giữ lâu nhảy cao hơn', 200, 630); T('Leo lên những cuống sen cao dần!', 200, 654);
   }
   if (dead) {
     ctx.fillStyle = 'rgba(10,30,50,.45)'; ctx.fillRect(0, 0, 400, 700);
