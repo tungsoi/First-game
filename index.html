@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Chỉ Lên</title>
+<style>
+  html,body{margin:0;height:100%;background:#bfe6ff;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;font-family:system-ui,sans-serif}
+  canvas{display:block;margin:0 auto;height:100%;max-width:100%}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const W = 400, H = 700;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+function fit() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const h = innerHeight, w = Math.min(innerWidth, h * W / H);
+  cv.style.width = w + 'px'; cv.style.height = (w * H / W) + 'px';
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr * 1, 0, 0, dpr * 1, 0, 0);
+}
+addEventListener('resize', fit); fit();
+
+const G = 1800, MAXV = 950, MINV = 380, CHARGE_T = 0.9;
+let best = 0; try { best = +localStorage.getItem('onlyup_best') || 0; } catch (e) {}
+
+let plats, p, camY, charge, holding, dir, topGen, maxH, msg, msgT, shake, parts;
+
+function reset() {
+  plats = [{ x: 0, y: 0, w: W, h: 40, cp: true }];
+  topGen = 0;
+  p = { x: W / 2, y: 0, vx: 0, vy: 0, on: true, face: 1, sq: 0 };
+  camY = 0; charge = 0; holding = false; dir = 1; maxH = 0; msg = ''; msgT = 0; shake = 0; parts = [];
+  gen(900);
+}
+function gen(upTo) {
+  while (topGen > -upTo) {
+    const n = plats.length;
+    const last = plats[plats.length - 1];
+    const lvl = Math.min(-topGen / 6000, 1);
+    let dy = 80 + Math.random() * (50 + 40 * lvl);
+    const w = 110 - 50 * lvl - Math.random() * 20;
+    topGen -= dy;
+    const lc = last.x + last.w / 2;
+    let cx = lc + (Math.random() * 2 - 1) * 190;
+    cx = Math.max(w / 2 + 10, Math.min(W - w / 2 - 10, cx));
+    const cp = n % 15 === 0;
+    plats.push(cp ? { x: 60, y: topGen, w: W - 120, h: 18, cp: true }
+                  : { x: cx - w / 2, y: topGen, w, h: 16, cp: false });
+  }
+}
+function say(t) { msg = t; msgT = 1.6; }
+function puff(x, y, n, c) {
+  for (let i = 0; i < n; i++) parts.push({ x, y, vx: (Math.random() - .5) * 200, vy: -Math.random() * 160, t: .5, c });
+}
+
+function down(e) {
+  e.preventDefault();
+  if (p.dead) return;
+  const r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * W;
+  dir = x < W / 2 ? -1 : 1;
+  if (p.on) holding = true;
+}
+function up(e) {
+  e.preventDefault();
+  if (!holding) return;
+  holding = false;
+  if (p.on) {
+    const k = Math.max(charge, 0.12);
+    const v = MINV + (MAXV - MINV) * k;
+    p.vy = -v; p.vx = dir * (60 + 230 * k); p.face = dir; p.on = false;
+    puff(p.x, p.y, 6, '#fff');
+  }
+  charge = 0;
+}
+cv.addEventListener('pointerdown', down);
+addEventListener('pointerup', up);
+addEventListener('pointercancel', up);
+addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') down({ preventDefault() {}, clientX: cv.getBoundingClientRect().left + 1 });
+  if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'Space') down({ preventDefault() {}, clientX: cv.getBoundingClientRect().right - 1 });
+});
+addEventListener('keyup', e => up({ preventDefault() {} }));
+
+let lastCP = 0;
+function update(dt) {
+  if (holding && p.on) charge = Math.min(1, charge + dt / CHARGE_T);
+  if (p.on) {
+    p.vx *= 0.8;
+  } else {
+    const py = p.y;
+    p.vy = Math.min(p.vy + G * dt, 1400);
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.x < 14) { p.x = 14; p.vx = Math.abs(p.vx) * 0.6; }
+    if (p.x > W - 14) { p.x = W - 14; p.vx = -Math.abs(p.vx) * 0.6; }
+    if (p.vy > 0) {
+      for (const s of plats) {
+        if (py <= s.y + 1 && p.y >= s.y && p.x > s.x - 6 && p.x < s.x + s.w + 6) {
+          p.y = s.y; p.vy = 0; p.vx = 0; p.on = true; p.sq = 1;
+          puff(p.x, p.y, 8, '#ffe28a');
+          if (s.cp && s.y < lastCP) { lastCP = s.y; say('Checkpoint! ⭐'); shake = 4; }
+          break;
+        }
+      }
+    }
+  }
+  p.sq = Math.max(0, p.sq - dt * 5);
+  const h = Math.max(0, -p.y);
+  if (h > maxH) maxH = h;
+  const m = Math.floor(maxH / 10);
+  if (m > best) { best = m; try { localStorage.setItem('onlyup_best', best); } catch (e) {} }
+  if (!p.on && p.y > maxH * -1 + 0 && -p.y < maxH - 450 && !p.fellSaid) { p.fellSaid = true; say('Ối! Rơi rồi 😵'); }
+  if (p.on) p.fellSaid = false;
+  const target = p.y - H * 0.6;
+  camY += (Math.min(target, 0 - H * 0.6 + 0) - camY) * Math.min(1, dt * 6);
+  gen(-p.y + 900);
+  plats = plats.filter(s => s.y < p.y + 1400 || s.cp);
+  if (plats.length > 200) plats = plats.filter(s => s.y < p.y + 2500);
+  for (const q of parts) { q.t -= dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 600 * dt; }
+  parts = parts.filter(q => q.t > 0);
+  msgT -= dt; shake = Math.max(0, shake - dt * 20);
+}
+
+function draw() {
+  const h = Math.max(0, -camY) ;
+  const t = Math.min(h / 8000, 1);
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  const c1 = `hsl(${200 + t * 60},${70 - t * 20}%,${80 - t * 55}%)`;
+  const c2 = `hsl(${190 + t * 70},${60}%,${92 - t * 60}%)`;
+  g.addColorStop(0, c1); g.addColorStop(1, c2);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // clouds (parallax)
+  ctx.fillStyle = 'rgba(255,255,255,.55)';
+  for (let i = 0; i < 8; i++) {
+    const cy = ((i * 173 - camY * 0.3) % (H + 100) + H + 100) % (H + 100) - 50;
+    const cx = (i * 97) % W;
+    ctx.beginPath(); ctx.ellipse(cx, cy, 50, 16, 0, 0, 7); ctx.ellipse(cx + 28, cy - 8, 30, 14, 0, 0, 7); ctx.fill();
+  }
+  ctx.save();
+  if (shake > 0) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
+  ctx.translate(0, -camY);
+  for (const s of plats) {
+    if (s.y + camY < -40 || s.y + camY > H + 40) continue;
+    ctx.fillStyle = s.cp ? '#f4b942' : '#7a5230';
+    rr(s.x, s.y, s.w, s.h + (s.y === 0 ? 400 : 0), 8);
+    ctx.fillStyle = s.cp ? '#ffd873' : '#5fc45a';
+    rr(s.x, s.y, s.w, 7, 4);
+    if (s.cp && s.y !== 0) { ctx.fillStyle = '#e8453c'; ctx.fillRect(s.x + s.w - 20, s.y - 30, 3, 30); ctx.fillRect(s.x + s.w - 17, s.y - 30, 16, 11); }
+  }
+  for (const q of parts) { ctx.globalAlpha = q.t * 2; ctx.fillStyle = q.c; ctx.fillRect(q.x, q.y, 4, 4); }
+  ctx.globalAlpha = 1;
+  // player
+  const sq = p.on ? (charge * 0.35 + p.sq * 0.25) : 0;
+  const sx = 1 + sq * 0.6, sy = 1 - sq;
+  ctx.save(); ctx.translate(p.x, p.y);
+  if (!p.on) ctx.rotate(Math.max(-.4, Math.min(.4, p.vx / 500)));
+  ctx.scale(sx, sy);
+  ctx.fillStyle = '#ff9a3c'; rr(-14, -30, 28, 30, 12);
+  ctx.fillStyle = '#ffb868'; ctx.beginPath(); ctx.moveTo(-12, -28); ctx.lineTo(-8, -38); ctx.lineTo(-3, -29); ctx.moveTo(12, -28); ctx.lineTo(8, -38); ctx.lineTo(3, -29); ctx.fill();
+  ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(-5 + p.face * 3, -18, 2.6, 0, 7); ctx.arc(6 + p.face * 3, -18, 2.6, 0, 7); ctx.fill();
+  ctx.restore();
+  // aim arrow
+  if (holding && p.on) {
+    const k = Math.max(charge, .12), v = MINV + (MAXV - MINV) * k, vx = dir * (60 + 230 * k);
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    for (let i = 1; i <= 7; i++) {
+      const tt = i * 0.07;
+      ctx.beginPath(); ctx.arc(p.x + vx * tt, p.y - 15 - v * tt + 0.5 * G * tt * tt, 4 - i * .3, 0, 7); ctx.fill();
+    }
+  }
+  ctx.restore();
+  // HUD
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
+  ctx.font = 'bold 40px system-ui'; const cur = Math.floor(Math.max(0, -p.y) / 10);
+  ctx.strokeText(cur + ' m', W / 2, 55); ctx.fillText(cur + ' m', W / 2, 55);
+  ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'left';
+  ctx.strokeText('Kỷ lục: ' + best + ' m', 14, 24); ctx.fillText('Kỷ lục: ' + best + ' m', 14, 24);
+  // charge bar
+  if (holding) { ctx.fillStyle = 'rgba(0,0,0,.3)'; rr(W / 2 - 60, H - 40, 120, 12, 6); ctx.fillStyle = `hsl(${120 - charge * 120},80%,55%)`; rr(W / 2 - 60, H - 40, 120 * charge, 12, 6); }
+  ctx.textAlign = 'center';
+  if (msgT > 0) { ctx.font = 'bold 26px system-ui'; ctx.globalAlpha = Math.min(1, msgT); ctx.strokeText(msg, W / 2, 110); ctx.fillText(msg, W / 2, 110); ctx.globalAlpha = 1; }
+  if (maxH < 30 && !holding) {
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = '#fff';
+    ctx.strokeText('Giữ nửa trái/phải màn hình để nạp lực', W / 2, H - 70); ctx.fillText('Giữ nửa trái/phải màn hình để nạp lực', W / 2, H - 70);
+    ctx.strokeText('Thả ra để nhảy – càng giữ lâu càng cao!', W / 2, H - 48); ctx.fillText('Thả ra để nhảy – càng giữ lâu càng cao!', W / 2, H - 48);
+  }
+}
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); }
+
+reset();
+let lt = performance.now();
+function loop(n) {
+  let dt = Math.min((n - lt) / 1000, 1 / 20); lt = n;
+  update(dt); draw(); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
