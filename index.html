@@ -17,11 +17,12 @@ const W = 200, H = 350, S = 2;
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const bf = document.createElement('canvas'); bf.width = W; bf.height = H;
 const b = bf.getContext('2d');
+let SC = 2;
 function fit() {
-  const dpr = Math.min(devicePixelRatio || 1, 3);
-  const h = innerHeight, w = Math.min(innerWidth, h * W / H);
-  cv.style.width = w + 'px'; cv.style.height = (w * H / W) + 'px';
-  cv.width = Math.round(w * dpr); cv.height = Math.round(w * H / W * dpr);
+  const dpr = window.devicePixelRatio || 1;
+  SC = Math.max(1, Math.floor(Math.min(innerWidth * dpr / W, innerHeight * dpr / H)));
+  cv.width = W * SC; cv.height = H * SC;
+  cv.style.width = (W * SC / dpr) + 'px'; cv.style.height = (H * SC / dpr) + 'px';
   ctx.imageSmoothingEnabled = false;
 }
 addEventListener('resize', fit); fit();
@@ -246,19 +247,37 @@ function draw() {
   }
   b.save();
   if (shake > 0) b.translate(rnd(R(-.5, .5) * shake), rnd(R(-.5, .5) * shake));
+  // stars + sun (dusk as you climb)
+  if (k > 0.2) for (let i = 0; i < 45; i++) {
+    const tw = 0.5 + 0.5 * Math.sin(clock * 2 + i * 1.7);
+    b.globalAlpha = Math.min(1, (k - 0.2) * 3) * (0.35 + 0.65 * tw);
+    rect(b, hash(i, 1) * W, hash(i, 2) * H * 0.55, 1, 1, '#fff');
+  }
+  b.globalAlpha = 1;
+  { const sx = 148, sy = 62 + k * 150, warm = k > 0.3 ? '#ffb066' : '#fff4b0';
+    pixEllipse(b, sx, sy, 24, 24, 'rgba(255,240,180,.16)'); pixEllipse(b, sx, sy, 17, 17, 'rgba(255,240,180,.28)'); pixEllipse(b, sx, sy, 10, 10, warm); }
   // clouds
-  b.fillStyle = 'rgba(255,255,255,.7)';
   for (let i = 0; i < 5; i++) {
-    const cx = (((i * 83 - camX * 0.12) % (W + 80)) + W + 80) % (W + 80) - 40, cy = 24 + i * 22 - alt * 0.05;
-    pixEllipse(b, cx, cy, 20, 5, 'rgba(255,255,255,.75)'); pixEllipse(b, cx + 12, cy - 4, 12, 4, 'rgba(255,255,255,.75)');
+    const ccx = (((i * 83 - camX * 0.12) % (W + 80)) + W + 80) % (W + 80) - 40, ccy = 24 + i * 22 - alt * 0.05;
+    pixEllipse(b, ccx, ccy + 2, 20, 4, 'rgba(210,225,245,.7)');
+    pixEllipse(b, ccx, ccy, 20, 5, 'rgba(255,255,255,.8)'); pixEllipse(b, ccx + 12, ccy - 4, 12, 4, 'rgba(255,255,255,.8)'); pixEllipse(b, ccx - 10, ccy - 3, 9, 3, 'rgba(255,255,255,.8)');
   }
-  // hills
-  const hb = 185 + (camY - CAMY0) * -0.3;
-  for (let i = -1; i < 5; i++) {
-    const hx = i * 130 + 50 - ((camX * 0.25) % 130 + 130) % 130 + 130;
-    pixEllipse(b, hx, hb, 85 + (i & 1) * 20, 30 + ((i * 37) & 15), i % 2 ? '#8fd48a' : '#74c46f');
+  // hills (3 parallax layers, tinted by dusk)
+  const hb = 185 + (camY - CAMY0) * -0.3, dusk = hex('#3b4a7a');
+  const layers = [['#a9dcc9', 0.12, -14, 95, 34], ['#8fd48a', 0.22, -4, 80, 28], ['#68bd6c', 0.36, 6, 70, 22]];
+  layers.forEach(([col, par, off, rx, ry], li) => {
+    const tc = mix(hex(col), dusk, k * 0.7);
+    for (let i = -1; i < 5; i++) {
+      const hx = i * 120 + 40 + li * 33 - ((camX * par) % 120 + 120) % 120 + 120;
+      pixEllipse(b, hx, hb + off, rx + (i & 1) * 18, ry + ((i * 37 + li * 11) & 15), tc);
+    }
+    if (li === 2) rect(b, 0, hb + off, W, H, tc);
+  });
+  // dragonflies
+  for (let i = 0; i < 3; i++) {
+    const dx = ((i * 71 + clock * (14 + i * 6)) % (W + 40)) - 20, dy = hb - 46 - i * 13 + Math.sin(clock * 3 + i) * 5;
+    rect(b, dx, dy, 3, 1, '#2a7ab8'); rect(b, dx - 1, dy + (Math.floor(clock * 14 + i) % 2 ? -2 : 1), 4, 1, 'rgba(255,255,255,.8)');
   }
-  rect(b, 0, hb, W, H, '#74c46f');
   const cx = rnd(camX), cy = rnd(camY);
   b.translate(-cx, -cy);
   // water
@@ -266,6 +285,16 @@ function draw() {
     const x0 = cx - 1, x1 = cx + W + 1;
     for (let j = 0; j < 9; j++) rect(b, x0, WATER + 2 + j * 8, x1 - x0, j === 8 ? H * 3 : 8, mix(WT, WD, Math.min(1, j / 6)));
     for (let x = x0; x < x1; x += 3) { const o = Math.round(Math.sin(x * 0.12 + clock * 2.4)); rect(b, x, WATER + 1 + o, 2, 1, 'rgba(255,255,255,.7)'); }
+  }
+  if (WATER < cy + H + 30) {
+    for (let x = cx - (cx % 24) - 24; x < cx + W + 24; x += 24) {
+      const h = hash(x, 5), hh = hash(x, 6);
+      if (x < 110) continue;
+      if (h > 0.62) { const px = x + rnd(hh * 10), sw = Math.round(Math.sin(clock * 1.4 + x) * 0.6);
+        rect(b, px + sw, WATER - 18, 1, 22, '#2f8a3d'); rect(b, px - 3 + sw, WATER - 10, 3, 1, '#3aa04a'); rect(b, px + 1 + sw, WATER - 13, 3, 1, '#3aa04a');
+        rect(b, px - 1 + sw, WATER - 26, 3, 8, '#7a4a22'); rect(b, px + sw, WATER - 28, 1, 2, '#b07a3a'); }
+      else if (h < 0.3) { const px = x + rnd(hh * 16); pixEllipse(b, px, WATER + 3, 7, 2, '#1c6b32'); pixEllipse(b, px, WATER + 2, 6, 1, '#3fbf5a'); }
+    }
   }
   for (const fh of fish) drawFish(fh);
   // stalks (behind leaves)
@@ -279,6 +308,7 @@ function draw() {
       rect(b, x - 1, yy, 3, 1, '#14602f'); rect(b, x, yy, 1, 1, '#4cc468');
       if ((yy - top) % 23 === 11) rect(b, x + 2, yy, 2, 1, '#14602f');
     }
+    if (s.y < WATER - 4) { const rp = (clock * 0.7 + s.ph) % 1; b.globalAlpha = 0.7 * (1 - rp); rect(b, sx - 2 - rp * 7, WATER + 1, 3, 1, '#fff'); rect(b, sx + rp * 7, WATER + 1, 3, 1, '#fff'); }
     b.globalAlpha = 1;
   }
   // bank (small island)
@@ -311,7 +341,7 @@ function draw() {
   ctx.clearRect(0, 0, cv.width, cv.height);
   ctx.drawImage(bf, 0, 0, cv.width, cv.height);
   // HUD
-  const u = cv.width / (W * S);
+  const u = cv.width / 400;
   ctx.save(); ctx.scale(u, u);
   const T = (s, x, y) => { ctx.strokeText(s, x, y); ctx.fillText(s, x, y); };
   ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 6; ctx.lineJoin = 'round';
@@ -335,10 +365,12 @@ function draw() {
 function hex2(c) { const m = c.match(/\d+/g).map(Number); return m; }
 
 reset();
-let lt = performance.now();
+let lt = performance.now(), acc = 0;
+const STEP = 1 / 120;
 function loop(n) {
-  const dt = Math.min((n - lt) / 1000, 1 / 30); lt = n;
-  update(dt); draw(); requestAnimationFrame(loop);
+  acc += Math.min((n - lt) / 1000, 0.05); lt = n;
+  while (acc >= STEP) { update(STEP); acc -= STEP; }
+  draw(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 </script>
