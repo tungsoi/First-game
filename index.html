@@ -178,45 +178,36 @@ const PAL = ['#1d4d2b', '#7ddf64', '#4cae4c', '#fff6b8', '#ffffff', '#222222', '
 function frogSprite() {
   f.clearRect(0, 0, 48, 48);
   const k = p.sqx + p.stretch, pl = p.pl, run = p.on ? Math.sin(p.x / 5) : 0;
-  const br = p.on ? Math.sin(clock * 5) * 0.02 : 0, bob = p.on ? Math.abs(run) * 0.8 : 0;
-  const eo = (clock % 3.2) < 0.12 ? 0.15 : 1;
-  f.save(); f.translate(24, 42 - bob); f.rotate(p.rot); f.scale(1 + k * 0.7, 1 - k + br);
-  f.lineWidth = 1.2; f.strokeStyle = '#1d4d2b'; f.lineJoin = 'round';
-  const el = (x, y, rx, ry, rot, fill) => { f.fillStyle = fill; f.beginPath(); f.ellipse(x, y, rx, ry, rot || 0, 0, 7); f.fill(); f.stroke(); };
-  // hind leg + orange toe pad
-  el(-(6.5 + 4 * pl) - run * 1.8 * (1 - pl), -3 - 3 * pl, 6 + 2.5 * pl, 3.5 - .25 * pl, .5 * pl, '#4cae4c');
-  f.fillStyle = '#ff9a3c'; f.beginPath(); f.arc(-(11 + 6 * pl) - run * 1.8 * (1 - pl), -3 - 3 * pl, 1.3, 0, 7); f.fill();
-  // chubby body + dark saddle + cream belly
-  el(0, -9, 12.5, 9, 0, '#7ddf64');
-  f.fillStyle = '#4cae4c'; f.beginPath(); f.ellipse(-3, -14, 7, 3.2, -0.15, 0, 7); f.fill();
-  f.fillStyle = '#fff6b8'; f.beginPath(); f.ellipse(3, -6, 7.5, 4.5, 0, 0, 7); f.fill();
-  // big round head
-  el(3, -15, 10, 7, 0, '#7ddf64');
-  f.fillStyle = '#7ddf64'; f.beginPath(); f.ellipse(3, -14, 8.5, 5.5, 0, 0, 7); f.fill();
+  const bob = p.on ? rnd(Math.abs(run) * 1.2) : 0, blink = (clock % 3.2) < 0.12;
+  const xs = 1 + k * 0.6, ys = 1 - k, X = v => v * xs, Y = v => v * ys;
+  const OL = '#1f4d2f', GR = '#78e06a', DK = '#47b455', LT = '#b4f59a', CR = '#fff3c0', OR = '#ff9a3c';
+  const ox = 24, oy = 42 - bob;
+  const el = (cx, cy, rx, ry, fill) => {
+    const a = Math.max(1, rnd(rx)), c = Math.max(1, rnd(ry));
+    pixEllipse(f, ox + rnd(cx), oy + rnd(cy), a + 1, c + 1, OL); pixEllipse(f, ox + rnd(cx), oy + rnd(cy), a, c, fill);
+  };
+  const px = (x, y, w, h, col) => { f.fillStyle = col; f.fillRect(ox + rnd(x), oy + rnd(y), w, h); };
+  const leg = run * 1.6 * (1 - pl);
+  // hind leg + toes
+  el(X(-6 - 5 * pl + leg), Y(-4 - 3 * pl), X(6 + 2 * pl), Y(4 - pl), DK);
+  px(X(-12 - 6 * pl + leg), Y(-2 - 3 * pl), 2, 2, OR);
+  // body, highlight, belly
+  el(X(0), Y(-7), X(10), Y(7), GR);
+  pixEllipse(f, ox + rnd(X(-3)), oy + rnd(Y(-10)), Math.max(1, rnd(X(4))), 1, LT);
+  pixEllipse(f, ox + rnd(X(4)), oy + rnd(Y(-4)), Math.max(1, rnd(X(5))), Math.max(1, rnd(Y(3))), CR);
+  // head
+  el(X(4), Y(-12), X(9), Y(5), GR);
+  pixEllipse(f, ox + rnd(X(1)), oy + rnd(Y(-14)), 3, 1, LT);
   // eyes
-  for (const x of [-2, 8]) {
-    el(x, -21, 4.6, 4.6, 0, '#7ddf64');
-    f.fillStyle = '#fff'; f.beginPath(); f.ellipse(x, -21.2, 3.4, 3.4 * eo, 0, 0, 7); f.fill();
-    f.fillStyle = '#222'; f.beginPath(); f.ellipse(x + 1, -21, 2, 2 * eo, 0, 0, 7); f.fill();
-    if (eo > .5) { f.fillStyle = '#fff'; f.beginPath(); f.arc(x + 1.6, -22, 0.7, 0, 7); f.fill(); }
+  for (const ex of [-1, 8]) {
+    el(X(ex), Y(-17), 3, 3, blink ? GR : '#ffffff');
+    if (blink) px(X(ex) - 2, Y(-17), 5, 1, OL); else px(X(ex) + 1, Y(-17) - 1, 2, 2, '#1a1a1a');
   }
-  // blush + wide smile
-  f.fillStyle = '#ff8fa8'; f.beginPath(); f.arc(7.5, -11.5, 1.8, 0, 7); f.fill();
-  f.strokeStyle = '#1d4d2b'; f.lineWidth = 1; f.beginPath(); f.moveTo(2, -12.5); f.quadraticCurveTo(7, -8.5 + 2 * pl, 12, -13.5); f.stroke();
-  f.lineWidth = 1.2; el(6 + 1.5 * pl + run * 1.2 * (1 - pl), -1 - 1.5 * pl, 4.2, 2, 0, '#4cae4c');
-  f.fillStyle = '#ff9a3c'; f.beginPath(); f.arc(9.6 + 1.5 * pl + run * 1.2 * (1 - pl), -1 - 1.5 * pl, 1.1, 0, 7); f.fill();
-  f.restore();
-  const img = f.getImageData(0, 0, 48, 48), d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    if (d[i + 3] < 120) { d[i + 3] = 0; continue; }
-    let bi = 0, bd = 1e9;
-    for (let j = 0; j < PAL.length; j++) {
-      const dr = d[i] - PAL[j][0], dg = d[i + 1] - PAL[j][1], db = d[i + 2] - PAL[j][2], dd = dr * dr + dg * dg + db * db;
-      if (dd < bd) { bd = dd; bi = j; }
-    }
-    d[i] = PAL[bi][0]; d[i + 1] = PAL[bi][1]; d[i + 2] = PAL[bi][2]; d[i + 3] = 255;
-  }
-  f.putImageData(img, 0, 0);
+  // smile + blush
+  px(X(5), Y(-9), 5, 1, OL); px(X(10), Y(-10), 1, 1, OL); px(X(9), Y(-12), 2, 1, '#ff9db5');
+  // front arm + toes
+  el(X(9 + 4 * pl), Y(-2 - 5 * pl), 3, 2, DK);
+  px(X(12 + 4 * pl), Y(-1 - 5 * pl), 2, 2, OR);
   return fc;
 }
 
