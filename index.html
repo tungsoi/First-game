@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Ếch Nhảy Sen</title>
 <style>
-  html,body{margin:0;height:100%;background:#7fcbe8;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+  html,body{margin:0;height:100%;background:#16303f;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
   canvas{display:block;margin:0 auto;image-rendering:pixelated}
 </style>
 </head>
@@ -13,21 +13,24 @@
 <canvas id="c"></canvas>
 <script>
 // ---- low-res pixel buffer (1 game px = 2 screen px) ----
-const W = 200, H = 350, S = 2;
+let W = 200, H = 350, CAMY0 = -H * 0.55;
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
-const bf = document.createElement('canvas'); bf.width = W; bf.height = H;
+const bf = document.createElement('canvas');
 const b = bf.getContext('2d');
 let SC = 2;
 function fit() {
-  const dpr = window.devicePixelRatio || 1;
-  SC = Math.max(1, Math.floor(Math.min(innerWidth * dpr / W, innerHeight * dpr / H)));
+  const dpr = window.devicePixelRatio || 1, dw = innerWidth * dpr, dh = innerHeight * dpr;
+  const aw = Math.min(dw, dh * 0.6);
+  SC = Math.max(1, Math.round(aw / 200));
+  W = Math.ceil(aw / SC); H = Math.ceil(dh / SC); CAMY0 = -H * 0.55;
+  bf.width = W; bf.height = H;
   cv.width = W * SC; cv.height = H * SC;
   cv.style.width = (W * SC / dpr) + 'px'; cv.style.height = (H * SC / dpr) + 'px';
   ctx.imageSmoothingEnabled = false;
 }
 addEventListener('resize', fit); fit();
 
-const SPEED = 120, WATER = 14, G = 900, JV = 380, CUT = 0.42, PX = 55, CAMY0 = -H * 0.55;
+const SPEED = 120, WATER = 14, G = 900, JV = 380, CUT = 0.42, PX = 55;
 let best = 0; try { best = +localStorage.getItem('frog_best') || 0; } catch (e) {}
 const R = (a, c) => a + Math.random() * (c - a);
 const RI = (a, c) => Math.floor(R(a, c + 1));
@@ -263,8 +266,8 @@ function draw() {
     pixEllipse(b, ccx, ccy, 20, 5, 'rgba(255,255,255,.8)'); pixEllipse(b, ccx + 12, ccy - 4, 12, 4, 'rgba(255,255,255,.8)'); pixEllipse(b, ccx - 10, ccy - 3, 9, 3, 'rgba(255,255,255,.8)');
   }
   // hills (3 parallax layers, tinted by dusk)
-  const hb = 185 + (camY - CAMY0) * -0.3, dusk = hex('#3b4a7a');
-  const layers = [['#a9dcc9', 0.12, -14, 95, 34], ['#8fd48a', 0.22, -4, 80, 28], ['#68bd6c', 0.36, 6, 70, 22]];
+  const hb = H * 0.53 + (camY - CAMY0) * -0.3, dusk = hex('#3b4a7a');
+  const layers = [['#cfdcf0', 0.12, -14, 95, 34], ['#b3c6e2', 0.22, -4, 80, 28], ['#96b0d4', 0.36, 6, 70, 22]];
   layers.forEach(([col, par, off, rx, ry], li) => {
     const tc = mix(hex(col), dusk, k * 0.7);
     for (let i = -1; i < 5; i++) {
@@ -291,9 +294,9 @@ function draw() {
       const h = hash(x, 5), hh = hash(x, 6);
       if (x < 110) continue;
       if (h > 0.62) { const px = x + rnd(hh * 10), sw = Math.round(Math.sin(clock * 1.4 + x) * 0.6);
-        rect(b, px + sw, WATER - 18, 1, 22, '#2f8a3d'); rect(b, px - 3 + sw, WATER - 10, 3, 1, '#3aa04a'); rect(b, px + 1 + sw, WATER - 13, 3, 1, '#3aa04a');
+        rect(b, px + sw, WATER - 18, 1, 22, '#8a7448'); rect(b, px - 3 + sw, WATER - 10, 3, 1, '#a58c58'); rect(b, px + 1 + sw, WATER - 13, 3, 1, '#a58c58');
         rect(b, px - 1 + sw, WATER - 26, 3, 8, '#7a4a22'); rect(b, px + sw, WATER - 28, 1, 2, '#b07a3a'); }
-      else if (h < 0.3) { const px = x + rnd(hh * 16); pixEllipse(b, px, WATER + 3, 7, 2, '#1c6b32'); pixEllipse(b, px, WATER + 2, 6, 1, '#3fbf5a'); }
+      
     }
   }
   for (const fh of fish) drawFish(fh);
@@ -316,10 +319,10 @@ function draw() {
     rect(b, -300, 0, 400, 40, '#8a5a2b');
     for (let y = 4; y < 40; y += 3) for (let x = rnd(cx) - 2; x < 100; x += 3) if (hash(x, y) < .14) rect(b, x, y, 2, 1, '#6b4423');
     rect(b, -300, 36, 400, 4, '#6b4423');
-    rect(b, -300, 0, 400, 4, '#58d655'); rect(b, -300, 4, 400, 1, '#1f7a2a');
-    for (let x = rnd(cx); x < 100; x += 2) if (hash(x, 1) < .5) rect(b, x, -1, 1, 1, '#58d655');
-    rect(b, 96, 0, 6, 40, '#8a5a2b'); rect(b, 96, 0, 6, 4, '#58d655');
-    rect(b, -29, -34, 5, 34, '#6b4423'); pixEllipse(b, -26, -42, 16, 13, '#1b5e2a'); pixEllipse(b, -26, -43, 14, 11, '#2f9e44'); pixEllipse(b, -30, -46, 6, 4, '#4cc464');
+    rect(b, -300, 0, 400, 4, '#e0c080'); rect(b, -300, 4, 400, 1, '#a8864a');
+    for (let x = rnd(cx); x < 100; x += 2) if (hash(x, 1) < .5) rect(b, x, -1, 1, 1, '#e0c080');
+    rect(b, 96, 0, 6, 40, '#8a5a2b'); rect(b, 96, 0, 6, 4, '#e0c080');
+    pixEllipse(b, -22, -8, 18, 9, '#6f7782'); pixEllipse(b, -24, -10, 14, 6, '#8d95a0'); pixEllipse(b, 6, -4, 9, 5, '#7d8590');
     rect(b, 72, -26, 2, 26, '#6b4423'); rect(b, 74, -26, 11, 7, '#e8453c'); rect(b, 74, -19, 8, 2, '#e8453c');
   }
   // leaves
@@ -341,24 +344,24 @@ function draw() {
   ctx.clearRect(0, 0, cv.width, cv.height);
   ctx.drawImage(bf, 0, 0, cv.width, cv.height);
   // HUD
-  const u = cv.width / 400;
+  const u = SC / 2;
   ctx.save(); ctx.scale(u, u);
   const T = (s, x, y) => { ctx.strokeText(s, x, y); ctx.fillText(s, x, y); };
   ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 6; ctx.lineJoin = 'round';
-  ctx.font = 'bold 40px "Courier New",monospace'; T(score + ' m', 200, 56);
+  ctx.font = 'bold 40px "Courier New",monospace'; T(score + ' m', W, 56);
   ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'left'; ctx.lineWidth = 4; T('BEST ' + best + ' m', 12, 22);
   ctx.textAlign = 'center';
   if (!dead && jumps < 4) {
     ctx.font = 'bold 16px "Courier New",monospace';
-    T('Chạm để nhảy – giữ lâu nhảy cao hơn', 200, 630); T('Leo lên những cuống sen cao dần!', 200, 654);
+    T('Chạm để nhảy – giữ lâu nhảy cao hơn', W, H * 2 - 70); T('Leo lên những cuống sen cao dần!', W, H * 2 - 46);
   }
   if (dead) {
-    ctx.fillStyle = 'rgba(10,30,50,.45)'; ctx.fillRect(0, 0, 400, 700);
+    ctx.fillStyle = 'rgba(10,30,50,.45)'; ctx.fillRect(0, 0, W * 2, H * 2); ctx.translate(0, H - 350);
     ctx.fillStyle = '#fff'; ctx.lineWidth = 6;
-    ctx.font = 'bold 32px "Courier New",monospace'; T('TÕM! 💦', 200, 270);
-    ctx.font = 'bold 34px "Courier New",monospace'; T(score + ' m', 200, 330);
-    ctx.font = 'bold 18px "Courier New",monospace'; T((score >= best && score > 0 ? '🏆 KỶ LỤC MỚI! ' : '') + 'BEST ' + best + ' m', 200, 366);
-    if (deadT > 0.5) { ctx.font = 'bold 22px "Courier New",monospace'; T('Chạm để chơi lại', 200, 430); }
+    ctx.font = 'bold 32px "Courier New",monospace'; T('TÕM! 💦', W, 270);
+    ctx.font = 'bold 34px "Courier New",monospace'; T(score + ' m', W, 330);
+    ctx.font = 'bold 18px "Courier New",monospace'; T((score >= best && score > 0 ? '🏆 KỶ LỤC MỚI! ' : '') + 'BEST ' + best + ' m', W, 366);
+    if (deadT > 0.5) { ctx.font = 'bold 22px "Courier New",monospace'; T('Chạm để chơi lại', W, 430); }
   }
   ctx.restore();
 }
