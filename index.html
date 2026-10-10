@@ -57,7 +57,7 @@ function reset() {
   plats = [{ ground: true, x: -300, w: 400, y: 0, L: 0 }];
   p = { x: 0, y: 0, vy: 0, on: true, buf: 0, coy: 0, sqx: 0, sqv: 0, stretch: 0, pl: 0, rot: 0 };
   camX = -PX; camY = CAMY0; refY = 0; lastEnd = 100; lastY = 0;
-  state = 'play'; speed = SPEED; t = 0; score = 0; dead = false; deadT = 0; jumps = 0; parts = []; shake = 0;
+  state = 'play'; speed = SPEED; t = 0; score = 0; setTheme(0); toastT = 0; score = 0; dead = false; deadT = 0; jumps = 0; parts = []; shake = 0;
   fish = [];
   const cols = ['#ff9a3c', '#ffd84a', '#ff6f61', '#f2f2f2'];
   for (let i = 0; i < 9; i++) fish.push({ x: camX + R(0, W + 150), y: 0, dy: R(16, 70), d: Math.random() < .5 ? -1 : 1, v: R(10, 28), s: R(.8, 1.3), c: cols[i % 4], ph: R(0, 6) });
@@ -132,7 +132,7 @@ function stepFrogAnim(dt) {
 }
 function update(dt) {
   clock += dt;
-  stepFish(dt); stepParts(dt);
+  stepFish(dt); stepParts(dt); stepTheme(dt);
   if (state === 'menu') { stepFrogAnim(dt); return; }
   if (dead) { deadT += dt; shake = Math.max(0, shake - dt * 20); p.y += 40 * dt; stepFrogAnim(dt); return; }
   t += dt;
@@ -239,8 +239,33 @@ function leafSprite(w, fl) {
 }
 
 // ---- draw ----
+// ---- scenery themes: change every 30 m ----
+const mk = (name, top, bot, h, cloud, cloudA, stars, sunY, sunCol, halo, bug, rain, wt, wd, moon) => ({ name, top: hex(top), bot: hex(bot), h: h.map(hex), cloud: hex(cloud), cloudA, stars, sunY, sunCol: hex(sunCol), halo: hex(halo), bug, rain, wt: hex(wt), wd: hex(wd), moon });
+const THEMES = [
+  mk('Ban ngày', '#8fd3f4', '#dff6ff', ['#cfdcf0', '#b3c6e2', '#96b0d4'], '#ffffff', .8, 0, 62, '#fff4b0', '#fff0b4', 1, 0, '#62cfe0', '#0b5272', 0),
+  mk('Hoàng hôn', '#5b4a9c', '#ffb27a', ['#e6a3a0', '#c47f8f', '#8c5f7f'], '#ffc9a0', .8, .15, 150, '#ff8a3c', '#ff9a5a', .3, 0, '#c9a0b0', '#3a2a5a', 0),
+  mk('Đêm trăng', '#070d2e', '#27397a', ['#3a4a86', '#2b3a70', '#1d2a58'], '#5a6aa0', .5, 1, 55, '#f4f1dc', '#aab8ff', 0, 0, '#2a5a8a', '#050f2a', 1),
+  mk('Bình minh', '#b79be0', '#ffd6e0', ['#f0d4e8', '#d8b8dc', '#b898c8'], '#fff0f5', .85, .2, 120, '#ffe08a', '#ffd6a0', .6, 0, '#9ac0e0', '#2b3f6a', 0),
+  mk('Mưa bão', '#4f5d70', '#a8b4c0', ['#8895a5', '#738193', '#5e6c7e'], '#7c8898', .95, 0, -60, '#dddddd', '#cccccc', 0, 1, '#5a8a9a', '#16303f', 0),
+];
+const cl = a => a.slice();
+let TH, themeIdx = 0, toastT = 0;
+function setTheme(i) {
+  const T0 = THEMES[i];
+  TH = { name: T0.name, top: cl(T0.top), bot: cl(T0.bot), h: T0.h.map(cl), cloud: cl(T0.cloud), cloudA: T0.cloudA, stars: T0.stars, sunY: T0.sunY, sunCol: cl(T0.sunCol), halo: cl(T0.halo), bug: T0.bug, rain: T0.rain, wt: cl(T0.wt), wd: cl(T0.wd), moon: T0.moon };
+  themeIdx = i;
+}
+function stepTheme(dt) {
+  const i = Math.floor(score / 30) % THEMES.length, T0 = THEMES[i], k = dt * 1.6;
+  if (i !== themeIdx) { themeIdx = i; TH.name = T0.name; toastT = 2.5; }
+  const la = (a, c) => { for (let j = 0; j < 3; j++) a[j] = lerp(a[j], c[j], k); };
+  la(TH.top, T0.top); la(TH.bot, T0.bot); la(TH.cloud, T0.cloud); la(TH.sunCol, T0.sunCol); la(TH.halo, T0.halo); la(TH.wt, T0.wt); la(TH.wd, T0.wd);
+  TH.h.forEach((c, j) => la(c, T0.h[j]));
+  for (const key of ['cloudA', 'stars', 'sunY', 'bug', 'rain', 'moon']) TH[key] = lerp(TH[key], T0[key], k);
+  toastT = Math.max(0, toastT - dt);
+}
+const rgba = (a, al) => `rgba(${rnd(a[0])},${rnd(a[1])},${rnd(a[2])},${al})`;
 const SKY0 = hex('#8fd3f4'), SKY1 = hex('#dff6ff'), DSK0 = hex('#5b6fb8'), DSK1 = hex('#f6c28b');
-const WT = hex('#62cfe0'), WD = hex('#0b5272');
 function drawFish(fh) {
   if (fh.y > 9000) return;
   const s = fh.s, d = fh.d, x = fh.x, y = fh.y + Math.sin(clock + fh.ph) * 1.5, wag = Math.sin(clock * 7 + fh.ph);
@@ -252,51 +277,53 @@ function drawFish(fh) {
   b.globalAlpha = 1;
 }
 function draw() {
-  const alt = Math.max(0, CAMY0 - camY), k = Math.min(alt / 400, 1) * 0.55;
   const bands = 16;
-  for (let i = 0; i < bands; i++) {
-    const kk = i / (bands - 1), top = mix(SKY0, SKY1, kk), c2 = mix(DSK0, DSK1, kk);
-    rect(b, 0, i * H / bands, W, H / bands + 1, mix(hex2(top), hex2(c2), k));
-  }
+  for (let i = 0; i < bands; i++) rect(b, 0, i * H / bands, W, H / bands + 1, mix(TH.top, TH.bot, i / (bands - 1)));
   b.save();
   if (shake > 0) b.translate(rnd(R(-.5, .5) * shake), rnd(R(-.5, .5) * shake));
-  // stars + sun (dusk as you climb)
-  if (k > 0.2) for (let i = 0; i < 45; i++) {
+  const alt = Math.max(0, CAMY0 - camY);
+  // stars
+  if (TH.stars > 0.02) for (let i = 0; i < 45; i++) {
     const tw = 0.5 + 0.5 * Math.sin(clock * 2 + i * 1.7);
-    b.globalAlpha = Math.min(1, (k - 0.2) * 3) * (0.35 + 0.65 * tw);
+    b.globalAlpha = TH.stars * (0.35 + 0.65 * tw);
     rect(b, hash(i, 1) * W, hash(i, 2) * H * 0.55, 1, 1, '#fff');
   }
   b.globalAlpha = 1;
-  { const sx = 148, sy = 62 + k * 150, warm = k > 0.3 ? '#ffb066' : '#fff4b0';
-    pixEllipse(b, sx, sy, 24, 24, 'rgba(255,240,180,.16)'); pixEllipse(b, sx, sy, 17, 17, 'rgba(255,240,180,.28)'); pixEllipse(b, sx, sy, 10, 10, warm); }
+  // sun / moon
+  { const sx = 148, sy = TH.sunY;
+    pixEllipse(b, sx, sy, 24, 24, rgba(TH.halo, .16)); pixEllipse(b, sx, sy, 17, 17, rgba(TH.halo, .28)); pixEllipse(b, sx, sy, 10, 10, rgba(TH.sunCol, 1));
+    if (TH.moon > 0.05) { b.globalAlpha = TH.moon; rect(b, sx - 5, sy - 3, 3, 3, 'rgba(150,150,175,.55)'); rect(b, sx + 2, sy + 2, 4, 3, 'rgba(150,150,175,.55)'); rect(b, sx - 1, sy - 6, 2, 2, 'rgba(150,150,175,.55)'); b.globalAlpha = 1; } }
   // clouds
   for (let i = 0; i < 5; i++) {
     const ccx = (((i * 83 - camX * 0.12) % (W + 80)) + W + 80) % (W + 80) - 40, ccy = 24 + i * 22 - alt * 0.05;
-    pixEllipse(b, ccx, ccy + 2, 20, 4, 'rgba(210,225,245,.7)');
-    pixEllipse(b, ccx, ccy, 20, 5, 'rgba(255,255,255,.8)'); pixEllipse(b, ccx + 12, ccy - 4, 12, 4, 'rgba(255,255,255,.8)'); pixEllipse(b, ccx - 10, ccy - 3, 9, 3, 'rgba(255,255,255,.8)');
+    const c1 = rgba(TH.cloud, TH.cloudA), c2 = rgba(TH.cloud, TH.cloudA * 0.6);
+    pixEllipse(b, ccx, ccy + 2, 20, 4, c2);
+    pixEllipse(b, ccx, ccy, 20, 5, c1); pixEllipse(b, ccx + 12, ccy - 4, 12, 4, c1); pixEllipse(b, ccx - 10, ccy - 3, 9, 3, c1);
   }
-  // hills (3 parallax layers, tinted by dusk)
-  const hb = H * 0.53 + (camY - CAMY0) * -0.3, dusk = hex('#3b4a7a');
-  const layers = [['#cfdcf0', 0.12, -14, 95, 34], ['#b3c6e2', 0.22, -4, 80, 28], ['#96b0d4', 0.36, 6, 70, 22]];
-  layers.forEach(([col, par, off, rx, ry], li) => {
-    const tc = mix(hex(col), dusk, k * 0.7);
+  // hills (3 parallax layers)
+  const hb = H * 0.53 + (camY - CAMY0) * -0.3;
+  const layers = [[0.12, -14, 95, 34], [0.22, -4, 80, 28], [0.36, 6, 70, 22]];
+  layers.forEach(([par, off, rx, ry], li) => {
+    const tc = `rgb(${rnd(TH.h[li][0])},${rnd(TH.h[li][1])},${rnd(TH.h[li][2])})`;
     for (let i = -1; i < 5; i++) {
       const hx = i * 120 + 40 + li * 33 - ((camX * par) % 120 + 120) % 120 + 120;
       pixEllipse(b, hx, hb + off, rx + (i & 1) * 18, ry + ((i * 37 + li * 11) & 15), tc);
     }
     if (li === 2) rect(b, 0, hb + off, W, H, tc);
   });
-  // dragonflies
-  for (let i = 0; i < 3; i++) {
+  // dragonflies (daytime only)
+  if (TH.bug > 0.05) for (let i = 0; i < 3; i++) {
     const dx = ((i * 71 + clock * (14 + i * 6)) % (W + 40)) - 20, dy = hb - 46 - i * 13 + Math.sin(clock * 3 + i) * 5;
+    b.globalAlpha = TH.bug;
     rect(b, dx, dy, 3, 1, '#2a7ab8'); rect(b, dx - 1, dy + (Math.floor(clock * 14 + i) % 2 ? -2 : 1), 4, 1, 'rgba(255,255,255,.8)');
+    b.globalAlpha = 1;
   }
   const cx = rnd(camX), cy = rnd(camY);
   b.translate(-cx, -cy);
   // water
   if (WATER < cy + H) {
     const x0 = cx - 1, x1 = cx + W + 1;
-    for (let j = 0; j < 9; j++) rect(b, x0, WATER + 2 + j * 8, x1 - x0, j === 8 ? H * 3 : 8, mix(WT, WD, Math.min(1, j / 6)));
+    for (let j = 0; j < 9; j++) rect(b, x0, WATER + 2 + j * 8, x1 - x0, j === 8 ? H * 3 : 8, mix(TH.wt, TH.wd, Math.min(1, j / 6)));
     for (let x = x0; x < x1; x += 3) { const o = Math.round(Math.sin(x * 0.12 + clock * 2.4)); rect(b, x, WATER + 1 + o, 2, 1, 'rgba(255,255,255,.7)'); }
   }
   if (WATER < cy + H + 30) {
@@ -349,6 +376,14 @@ function draw() {
   b.drawImage(frogSprite(), rnd(p.x) - 24, rnd(p.y) - 42);
   b.globalAlpha = 1;
   b.restore();
+  if (TH.rain > 0.03) {
+    b.globalAlpha = 0.55 * TH.rain;
+    for (let i = 0; i < 70; i++) {
+      const y = (hash(i, 5) * H + clock * (220 + hash(i, 4) * 120)) % H, x = (((hash(i, 3) * (W + 60) - y * 0.25) % (W + 60)) + W + 60) % (W + 60) - 30;
+      rect(b, x, y, 1, 5, '#cfe2ff');
+    }
+    b.globalAlpha = 1;
+  }
   // upscale
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, cv.width, cv.height);
@@ -361,6 +396,10 @@ function draw() {
   if (state !== 'menu') { ctx.font = 'bold 40px "Courier New",monospace'; T(score + ' m', W, 56); }
   ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'left'; ctx.lineWidth = 4; T('BEST ' + best + ' m', 12, 22);
   ctx.textAlign = 'center';
+  if (toastT > 0 && state === 'play' && !dead) {
+    ctx.globalAlpha = Math.min(1, toastT * 1.5); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 5;
+    ctx.font = 'bold 22px "Courier New",monospace'; T('✦ ' + TH.name + ' ✦', W, 100); ctx.globalAlpha = 1;
+  }
   if (state === 'play' && !dead && jumps < 4) {
     ctx.font = 'bold 16px "Courier New",monospace';
     T('Chạm để nhảy – giữ lâu nhảy cao hơn', W, H * 2 - 70); T('Leo lên những cuống sen cao dần!', W, H * 2 - 46);
