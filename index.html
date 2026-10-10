@@ -30,7 +30,7 @@ function fit() {
 }
 addEventListener('resize', fit); fit();
 
-const SPEED = 108, WATER = 14, G = 900, JV = 380, CUT = 0.42, PX = 55;
+const SPEED = 97, WATER = 14, G = 900, JV = 380, CUT = 0.42, PX = 55;
 let best = 0; try { best = +localStorage.getItem('frog_best') || 0; } catch (e) {}
 const R = (a, c) => a + Math.random() * (c - a);
 const RI = (a, c) => Math.floor(R(a, c + 1));
