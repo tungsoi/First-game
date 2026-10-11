@@ -30,7 +30,7 @@ function fit() {
 }
 addEventListener('resize', fit); fit();
 
-const SPEED = 107, WATER = 14, G = 900, JV = 320, CUT = 0.42, PX = 55;
+const SPEED = 107, MAXSPD = 200, ACC = 0.025, WATER = 14, G = 900, JV = 320, CUT = 0.42, PX = 55;
 let best = 0; try { best = +localStorage.getItem('frog_best') || 0; } catch (e) {}
 const R = (a, c) => a + Math.random() * (c - a);
 const RI = (a, c) => Math.floor(R(a, c + 1));
@@ -136,7 +136,7 @@ function update(dt) {
   if (state === 'menu') { stepFrogAnim(dt); return; }
   if (dead) { deadT += dt; shake = Math.max(0, shake - dt * 20); p.y += 40 * dt; stepFrogAnim(dt); return; }
   t += dt;
-  speed = SPEED;
+  speed = Math.min(MAXSPD, SPEED + p.x * ACC);
   for (const s of plats) {
     if (s.ground) continue;
     const onIt = p.on && p.x > s.x - 2 && p.x < s.x + s.w + 2;
@@ -398,6 +398,13 @@ function draw() {
   ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 6; ctx.lineJoin = 'round';
   if (state !== 'menu') { ctx.font = 'bold 40px "Courier New",monospace'; T(score + ' m', W, 56); }
   ctx.font = 'bold 14px "Courier New",monospace'; ctx.textAlign = 'left'; ctx.lineWidth = 4; T('BEST ' + best + ' m', 12, 22);
+  if (state !== 'menu') {
+    const fr2 = Math.max(0, Math.min(1, (speed - SPEED) / (MAXSPD - SPEED))), bx = W * 2 - 118;
+    ctx.textAlign = 'right'; ctx.font = 'bold 14px "Courier New",monospace'; T('⚡ ' + (speed / 4).toFixed(1) + ' m/s', W * 2 - 12, 22);
+    ctx.fillStyle = '#1b3a4b'; ctx.fillRect(bx - 2, 30, 108, 10);
+    ctx.fillStyle = 'rgb(' + rnd(lerp(120, 255, fr2)) + ',' + rnd(lerp(230, 90, fr2)) + ',80)'; ctx.fillRect(bx, 32, 104 * fr2 + 2, 6);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
+  }
   ctx.textAlign = 'center';
   if (toastT > 0 && state === 'play' && !dead) {
     ctx.globalAlpha = Math.min(1, toastT * 1.5); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 5;
