@@ -179,35 +179,33 @@ function frogSprite() {
   f.clearRect(0, 0, 48, 48);
   const k = p.sqx + p.stretch, pl = p.pl, run = p.on ? Math.sin(p.x / 5) : 0;
   const bob = p.on ? rnd(Math.abs(run) * 1.2) : 0, blink = (clock % 3.2) < 0.12;
-  const xs = 1 + k * 0.6, ys = 1 - k, X = v => v * xs, Y = v => v * ys;
-  const OL = '#1f4d2f', GR = '#7fe36c', DK = '#4cb85a', LT = '#c4fba8', CR = '#fff3c0';
-  const ox = 24, oy = 42 - bob;
+  const tilt = rnd(p.rot * 8), xs = 1 + k * 0.6, ys = 1 - k, X = v => v * xs, Y = v => v * ys;
+  const OL = '#1f4d2f', GR = '#78e06a', DK = '#47b455', CR = '#fff3c0';
+  const ox = 22, oy = 42 - bob;
   const el = (cx, cy, rx, ry, fill) => {
     const a = Math.max(1, rnd(rx)), c = Math.max(1, rnd(ry));
     pixEllipse(f, ox + rnd(cx), oy + rnd(cy), a + 1, c + 1, OL); pixEllipse(f, ox + rnd(cx), oy + rnd(cy), a, c, fill);
   };
   const px = (x, y, w, h, col) => { f.fillStyle = col; f.fillRect(ox + rnd(x), oy + rnd(y), w, h); };
-  // feet (little steps while running, tucked in the air)
-  for (const sd of [-1, 1]) el(X(sd * 6 + sd * run * -1.6 * (1 - pl)), Y(-1.5 - 3 * pl), 3.2, 1.8, DK);
-  // tiny body + belly
-  el(X(0), Y(-5.5 - pl), X(6.5), Y(4), GR);
-  pixEllipse(f, ox + rnd(X(0)), oy + rnd(Y(-5 - pl)), Math.max(1, rnd(X(3))), Math.max(1, rnd(Y(2))), CR);
-  // tiny arms
-  for (const sd of [-1, 1]) el(X(sd * (9 + pl * 2)), Y(-5 - 5 * pl), 2, 2.2, DK);
-  // eye bumps
-  for (const sd of [-1, 1]) el(X(sd * 7.5), Y(-23), 5, 4.5, GR);
-  // big head
-  el(X(0), Y(-13), X(13.5), Y(8.5), GR);
-  pixEllipse(f, ox + rnd(X(-3)), oy + rnd(Y(-19.5)), Math.max(1, rnd(X(5))), 1, LT);
-  // glossy black eyes with shine
-  for (const sd of [-1, 1]) {
-    const ex = X(sd * 7.5), ey = Y(-23);
-    if (blink) px(ex - 3, ey, 6, 1, OL);
-    else { pixEllipse(f, ox + rnd(ex), oy + rnd(ey), 3, 3, '#14202a'); px(ex - 2, ey - 2, 2, 2, '#ffffff'); px(ex + 1, ey + 1, 1, 1, '#ffffff'); }
+  const leg = run * 1.6 * (1 - pl);
+  // hind leg (left, folded when sitting, stretched back in the air)
+  el(X(-7 - 6 * pl + leg), Y(-4 - 3 * pl), X(6 + 2 * pl), Y(3.5 - pl), DK);
+  // body + cream belly (turned to the right)
+  el(X(0), Y(-9), X(11), Y(8), GR);
+  pixEllipse(f, ox + rnd(X(3)), oy + rnd(Y(-6)), Math.max(1, rnd(X(6))), Math.max(1, rnd(Y(4))), CR);
+  // near front arm reaching forward
+  el(X(10 + 3 * pl), Y(-3 - 4 * pl) + tilt, 4, Y(2), DK);
+  // head, shifted right
+  el(X(3), Y(-15) + tilt, X(10), Y(6), GR);
+  // big white eyes looking right
+  for (const ex of [-1, 8]) {
+    const cx = X(ex), cy = Y(-20) + tilt;
+    el(cx, cy, ex < 0 ? 4 : 4.5, ex < 0 ? 4 : 4.5, blink ? GR : '#ffffff');
+    if (blink) px(cx - 3, cy, 7, 1, OL); else px(cx + 1, cy - 1, 2, 3, '#1a1a1a');
   }
-  // blush + smile
-  for (const sd of [-1, 1]) px(X(sd * 9.5) - 1, Y(-11), 3, 2, '#ff9db5');
-  px(X(-3), Y(-10), 1, 1, OL); px(X(-2), Y(-9), 5, 1, OL); px(X(3), Y(-10), 1, 1, OL);
+  // mouth along the snout
+  px(X(2), Y(-12) + tilt, 8, 1, OL); px(X(10), Y(-13) + tilt, 1, 1, OL);
+  px(X(7), Y(-14) + tilt, 2, 1, '#ff9db5');
   return fc;
 }
 
