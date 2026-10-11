@@ -79,6 +79,52 @@ function gen() {
 function waterAt(x) { return x < 100 ? 9999 : WATER; }
 function puff(x, y, n, c) { for (let i = 0; i < n; i++) parts.push({ x, y, vx: R(-55, 55), vy: -R(30, 130), t: .6, c }); }
 
+// ---- sound (WebAudio, synthesized) ----
+let AC = null, muted = false, croakT = 6, beatN = 0;
+try { muted = localStorage.getItem('frog_mute') === '1'; } catch (e) {}
+function audio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(f0, f1, dur, type, vol, delay) {
+  if (muted) return; const a = audio(); if (!a) return;
+  const t0 = a.currentTime + (delay || 0), o = a.createOscillator(), g = a.createGain();
+  o.type = type || 'square'; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t0 + dur);
+  g.gain.setValueAtTime(vol || .1, t0); g.gain.exponentialRampToValueAtTime(.001, t0 + dur);
+  o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + dur + .03);
+}
+function noise(dur, vol, f0, f1) {
+  if (muted) return; const a = audio(); if (!a) return;
+  const n = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const src = a.createBufferSource(), fl = a.createBiquadFilter(), g = a.createGain(), t0 = a.currentTime;
+  src.buffer = buf; fl.type = 'lowpass'; fl.frequency.setValueAtTime(f0, t0); fl.frequency.exponentialRampToValueAtTime(Math.max(80, f1), t0 + dur);
+  g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(.001, t0 + dur);
+  src.connect(fl); fl.connect(g); g.connect(a.destination); src.start(t0);
+}
+const sfxJump = () => { tone(300, 720, .13, 'square', .07); tone(150, 300, .1, 'triangle', .1); };
+const sfxLand = () => { tone(190, 70, .1, 'triangle', .16); noise(.06, .08, 1800, 500); };
+const sfxClick = () => { tone(520, 880, .09, 'square', .07); };
+const sfxSplash = () => { noise(.55, .22, 2500, 200); tone(420, 70, .45, 'sawtooth', .05); };
+const sfxChime = () => { [523, 659, 784, 1047].forEach((fq, i) => tone(fq, fq * 1.002, .25, 'triangle', .08, i * .09)); };
+const sfxFanfare = () => { [523, 659, 784, 1047, 784, 1047].forEach((fq, i) => tone(fq, fq * 1.002, .2, 'square', .06, i * .11)); };
+const sfxCroak = () => { tone(130, 95, .09, 'sawtooth', .05); tone(150, 100, .11, 'sawtooth', .05, .12); };
+const MEL = [0, 2, 4, 7, 9, 7, 4, 2, 0, 4, 7, 12, 9, 7, 4, 2];
+setInterval(() => {
+  if (muted || !AC || state !== 'play' || dead) return;
+  const sh = [0, -2, -5, 2, -7][themeIdx % 5], n = MEL[beatN % 16] + sh;
+  tone(261.63 * Math.pow(2, n / 12), 261.63 * Math.pow(2, n / 12), .22, 'triangle', .035);
+  if (beatN % 4 === 0) tone(130.8 * Math.pow(2, sh / 12), 130.8 * Math.pow(2, sh / 12), .5, 'sine', .05);
+  beatN++;
+}, 260);
+function hudPt(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W * 2, y: (e.clientY - r.top) / r.height * H * 2 }; }
+const MUTE = { x: 12, y: 34, w: 32, h: 28 };
+function hitMute(e) {
+  if (e.clientX === undefined) return false;
+  const q = hudPt(e); return q.x >= MUTE.x - 6 && q.x <= MUTE.x + MUTE.w + 6 && q.y >= MUTE.y - 6 && q.y <= MUTE.y + MUTE.h + 6;
+}
+
 // ---- input ----
 function btnRect() {
   return state === 'menu' ? { x: W - 120, y: Math.round(H * 1.1) + 40, w: 240, h: 60 } : { x: W - 120, y: 440 + (H - 350) - 30, w: 240, h: 60 };
@@ -90,8 +136,10 @@ function hitBtn(e) {
 }
 function press(e) {
   if (e && e.preventDefault) e.preventDefault();
-  if (state === 'menu') { if (hitBtn(e)) { state = 'play'; p.buf = 0; } return; }
-  if (dead) { if (deadT > 0.5 && hitBtn(e)) reset(); return; }
+  audio();
+  if (hitMute(e)) { muted = !muted; try { localStorage.setItem('frog_mute', muted ? '1' : '0'); } catch (err) {} if (!muted) sfxClick(); return; }
+  if (state === 'menu') { if (hitBtn(e)) { state = 'play'; p.buf = 0; sfxClick(); } return; }
+  if (dead) { if (deadT > 0.5 && hitBtn(e)) { reset(); sfxClick(); } return; }
   p.buf = 0.12;
 }
 function release(e) {
@@ -102,7 +150,7 @@ function release(e) {
 function doJump() {
   p.vy = -JV; p.on = false; p.jumping = true; p.buf = 0; p.coy = 0; jumps++;
   p.sqx = -0.3; p.sqv = 0;
-  puff(p.x, p.y, 4, '#d6f5ff');
+  puff(p.x, p.y, 4, '#d6f5ff'); sfxJump();
 }
 cv.addEventListener('pointerdown', press);
 addEventListener('pointerup', release);
@@ -155,17 +203,18 @@ function update(dt) {
     }
   }
   if (landed) {
-    if (!p.on) { p.sqx = 0.34; p.sqv = 0; puff(p.x, landed.y, 4, '#d6f5ff'); }
+    if (!p.on) { p.sqx = 0.34; p.sqv = 0; puff(p.x, landed.y, 4, '#d6f5ff'); sfxLand(); }
     p.y = landed.y; p.vy = 0; p.on = true; p.coy = 0.1; p.jumping = false; refY = landed.L;
     score = Math.max(score, Math.floor(-landed.L / 4));
   } else if (p.on) { p.on = false; p.coy = 0.1; }
   if (p.buf > 0 && (p.on || p.coy > 0)) doJump();
   stepFrogAnim(dt);
+  croakT -= dt; if (p.on && croakT < 0) { sfxCroak(); croakT = R(5, 9); }
   if (score > best) { best = score; try { localStorage.setItem('frog_best', best); } catch (e) {} }
   camX = p.x - PX;
   const lost = !p.on && p.y > refY + 70;
   camY += (((lost ? p.y : refY) + CAMY0) - camY) * Math.min(1, dt * (lost ? 6 : 3.5));
-  if (!p.on && p.y > WATER + 6) { dead = true; deadT = 0; shake = 4; puff(p.x, WATER, 12, '#bfefff'); }
+  if (!p.on && p.y > WATER + 6) { dead = true; deadT = 0; shake = 4; puff(p.x, WATER, 12, '#bfefff'); sfxSplash(); if (score >= best && score > 0) setTimeout(sfxFanfare, 450); }
   gen();
   plats = plats.filter(s => s.x + s.w > camX - 100);
   shake = Math.max(0, shake - dt * 20);
@@ -260,7 +309,7 @@ function setTheme(i) {
 }
 function stepTheme(dt) {
   const i = Math.floor(score / 30) % THEMES.length, T0 = THEMES[i], k = dt * 1.6;
-  if (i !== themeIdx) { themeIdx = i; TH.name = T0.name; toastT = 2.5; }
+  if (i !== themeIdx) { themeIdx = i; TH.name = T0.name; toastT = 2.5; sfxChime(); }
   const la = (a, c) => { for (let j = 0; j < 3; j++) a[j] = lerp(a[j], c[j], k); };
   la(TH.top, T0.top); la(TH.bot, T0.bot); la(TH.cloud, T0.cloud); la(TH.sunCol, T0.sunCol); la(TH.halo, T0.halo); la(TH.wt, T0.wt); la(TH.wd, T0.wd);
   TH.h.forEach((c, j) => la(c, T0.h[j]));
@@ -405,6 +454,10 @@ function draw() {
     ctx.fillStyle = 'rgb(' + rnd(lerp(120, 255, fr2)) + ',' + rnd(lerp(230, 90, fr2)) + ',80)'; ctx.fillRect(bx, 32, 104 * fr2 + 2, 6);
     ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
   }
+  ctx.fillStyle = 'rgba(27,58,75,.75)'; ctx.fillRect(MUTE.x, MUTE.y, MUTE.w, MUTE.h);
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 20px "Courier New",monospace'; ctx.fillText('♪', MUTE.x + MUTE.w / 2, MUTE.y + 21);
+  if (muted) { ctx.strokeStyle = '#ff6b5e'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(MUTE.x + 3, MUTE.y + MUTE.h - 3); ctx.lineTo(MUTE.x + MUTE.w - 3, MUTE.y + 3); ctx.stroke(); }
+  ctx.textAlign = 'left';
   ctx.textAlign = 'center';
   if (toastT > 0 && state === 'play' && !dead) {
     ctx.globalAlpha = Math.min(1, toastT * 1.5); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 5;
