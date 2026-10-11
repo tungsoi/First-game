@@ -175,38 +175,42 @@ function update(dt) {
 const fc = document.createElement('canvas'); fc.width = fc.height = 48;
 const f = fc.getContext('2d', { willReadFrequently: true });
 const PAL = ['#1d4d2b', '#7ddf64', '#4cae4c', '#fff6b8', '#ffffff', '#222222', '#ff8fa8', '#ff9a3c'].map(hex);
+const fr = document.createElement('canvas'); fr.width = fr.height = 48;
+const fg = fr.getContext('2d');
+const FLAP = [0, 1, 2, 1];
 function frogSprite() {
   f.clearRect(0, 0, 48, 48);
-  const k = p.sqx + p.stretch, pl = p.pl, run = p.on ? Math.sin(p.x / 5) : 0;
-  const bob = p.on ? rnd(Math.abs(run) * 1.2) : 0, blink = (clock % 3.2) < 0.12;
-  const tilt = rnd(p.rot * 8), xs = 1 + k * 0.6, ys = 1 - k, X = v => v * xs, Y = v => v * ys;
-  const OL = '#1f4d2f', GR = '#78e06a', DK = '#47b455', CR = '#fff3c0';
-  const ox = 22, oy = 42 - bob;
+  const k = p.sqx + p.stretch, xs = 1 + k * 0.6, ys = 1 - k, X = v => v * xs, Y = v => v * ys;
+  const OL = '#1f4d2f', GR = '#7fe36c', DK = '#4cb85a', CR = '#fff3c0';
+  const ox = 24, oy = 42, blink = (clock % 3.4) < 0.1;
   const el = (cx, cy, rx, ry, fill) => {
     const a = Math.max(1, rnd(rx)), c = Math.max(1, rnd(ry));
     pixEllipse(f, ox + rnd(cx), oy + rnd(cy), a + 1, c + 1, OL); pixEllipse(f, ox + rnd(cx), oy + rnd(cy), a, c, fill);
   };
   const px = (x, y, w, h, col) => { f.fillStyle = col; f.fillRect(ox + rnd(x), oy + rnd(y), w, h); };
-  const leg = run * 1.6 * (1 - pl);
-  // hind leg (left, folded when sitting, stretched back in the air)
-  el(X(-7 - 6 * pl + leg), Y(-4 - 3 * pl), X(6 + 2 * pl), Y(3.5 - pl), DK);
-  // body + cream belly (turned to the right)
-  el(X(0), Y(-9), X(11), Y(8), GR);
-  pixEllipse(f, ox + rnd(X(3)), oy + rnd(Y(-6)), Math.max(1, rnd(X(6))), Math.max(1, rnd(Y(4))), CR);
-  // near front arm reaching forward
-  el(X(10 + 3 * pl), Y(-3 - 4 * pl) + tilt, 4, Y(2), DK);
-  // head, shifted right
-  el(X(3), Y(-15) + tilt, X(10), Y(6), GR);
-  // big white eyes looking right
-  for (const ex of [-1, 8]) {
-    const cx = X(ex), cy = Y(-20) + tilt;
-    el(cx, cy, ex < 0 ? 4 : 4.5, ex < 0 ? 4 : 4.5, blink ? GR : '#ffffff');
-    if (blink) px(cx - 3, cy, 7, 1, OL); else px(cx + 1, cy - 1, 2, 3, '#1a1a1a');
-  }
-  // mouth along the snout
-  px(X(2), Y(-12) + tilt, 8, 1, OL); px(X(10), Y(-13) + tilt, 1, 1, OL);
-  px(X(7), Y(-14) + tilt, 2, 1, '#ff9db5');
-  return fc;
+  // flapping "wing": the hind leg kicks through 3 frames like the bird in Flappy Bird
+  const fi = p.on ? FLAP[Math.floor(p.x / 5) & 3] : (p.vy < 0 ? FLAP[Math.floor(clock * 18) & 3] : 1);
+  const ly = p.on ? -4 - (fi === 0 ? 2 : fi === 2 ? 0 : 1) : -9 + fi * 3;
+  // far foot
+  el(X(4), Y(-2), 3, 1.5, DK);
+  // body + belly
+  el(X(0), Y(-8), X(10), Y(7), GR);
+  pixEllipse(f, ox + rnd(X(2)), oy + rnd(Y(-4.5)), Math.max(1, rnd(X(6))), Math.max(1, rnd(Y(2.5))), CR);
+  // big eye (looks up when rising, down when falling)
+  const look = p.on ? 0 : (p.vy < -80 ? -1 : p.vy > 120 ? 1 : 0);
+  el(X(5), Y(-12), 3.5, 3.5, blink ? GR : '#ffffff');
+  if (blink) px(X(5) - 3, Y(-12), 7, 1, OL); else px(X(5) + 1, Y(-12) - 1 + look, 2, 3, '#1a1a1a');
+  // mouth + blush
+  px(X(5), Y(-6), 6, 1, OL); px(X(11), Y(-7), 1, 1, OL); px(X(3), Y(-8), 2, 2, '#ff9db5');
+  // wing leg on top of body
+  el(X(-5), ly, 5, 2.6, DK);
+  px(X(-10), ly - 1, 2, 2, DK);
+  // near foot
+  el(X(6), Y(-1.5), 3.2, 1.8, DK);
+  // rotate like the bird (nearest-neighbour keeps it pixelly)
+  fg.clearRect(0, 0, 48, 48); fg.imageSmoothingEnabled = false;
+  fg.save(); fg.translate(24, 32); fg.rotate(p.on ? 0 : Math.max(-0.35, Math.min(0.55, p.vy / 800))); fg.drawImage(fc, -24, -32); fg.restore();
+  return fr;
 }
 
 // ---- leaf sprites (cached) ----
