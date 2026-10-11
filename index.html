@@ -30,7 +30,7 @@ function fit() {
 }
 addEventListener('resize', fit); fit();
 
-const SPEED = 97, WATER = 14, G = 900, JV = 380, CUT = 0.42, PX = 55;
+const SPEED = 107, WATER = 14, G = 900, JV = 320, CUT = 0.42, PX = 55;
 let best = 0; try { best = +localStorage.getItem('frog_best') || 0; } catch (e) {}
 const R = (a, c) => a + Math.random() * (c - a);
 const RI = (a, c) => Math.floor(R(a, c + 1));
@@ -66,7 +66,7 @@ function reset() {
 function gen() {
   while (lastEnd < camX + W + 250) {
     const lvl = Math.min(t / 60, 1);
-    const rise = plats.length < 4 ? R(-4, 14) : R(-48, 52);
+    const rise = plats.length < 4 ? R(-4, 14) : R(-48, 40);
     let gap = 8 + speed * R(0.06, 0.55);
     if (rise > 0) gap *= Math.max(0.55, 1 - rise / 70);
     const y = Math.min(lastY - rise, -6);
