@@ -17,6 +17,11 @@
   html,body{margin:0;height:100%;background:#16303f;overscroll-behavior:none;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
   canvas{display:block;position:fixed;top:0;left:50%;transform:translateX(-50%);image-rendering:pixelated}
   body{background:transparent}
+  .gbtn{position:fixed;display:none;z-index:5;margin:0;padding:0;font:bold 26px "Courier New",monospace;color:#1b3a4b;background:#ffd84a;border:4px solid #1b3a4b;box-shadow:4px 6px 0 #1b3a4b,inset 0 4px 0 #fff3a8,inset 0 -6px 0 #e0a82a;border-radius:0;-webkit-appearance:none;appearance:none;touch-action:manipulation;cursor:pointer;line-height:1}
+  .gbtn:active{transform:translate(2px,3px)}
+  .gbtn.mute{background:rgba(27,58,75,.8);color:#fff;border:0;box-shadow:none}
+  .gbtn.mute.muted::after{content:"";position:absolute;left:3px;right:3px;top:50%;height:3px;background:#ff6b5e;transform:rotate(-35deg)}
+  #ver{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(8px + env(safe-area-inset-bottom));z-index:5;display:none;color:#fff;font:bold 14px "Courier New",monospace;text-shadow:2px 2px 0 #1b3a4b,-1px -1px 0 #1b3a4b;padding:10px 28px;touch-action:manipulation}
   #rot{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:#122836;color:#fff;text-align:center;font:bold 18px/1.4 "Courier New",monospace}
   #rot span{font-size:44px}
   @media (orientation:landscape) and (pointer:coarse) and (max-height:500px){#rot{display:flex}}
@@ -40,6 +45,10 @@ addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__bip 
 </head>
 <body>
 <div id="gate"></div>
+<button id="bStart" class="gbtn">▶ BẮT ĐẦU</button>
+<button id="bReplay" class="gbtn">↻ CHƠI LẠI</button>
+<button id="bMute" class="gbtn mute">♪</button>
+<div id="ver"></div>
 <div id="rot"><span>📱↻</span>Xoay dọc màn hình để chơi</div>
 <canvas id="c"></canvas>
 <script>
@@ -82,7 +91,7 @@ if (window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElem
 fit(); addEventListener('load', () => { fit(); setTimeout(fit, 300); setTimeout(fit, 1200); });
 
 const SPEED = 107, MAXSPD = 200, ACC = 0.025, WATER = 14, G = 900, JV = 320, CUT = 0.42, PX = 55;
-const VERSION = 'v1.8';
+const VERSION = 'v1.9';
 let updatedUntil = 0;
 try { const pv = localStorage.getItem('frog_ver'); localStorage.setItem('frog_ver', VERSION); if (pv && pv !== VERSION) updatedUntil = performance.now() + 5000; } catch (e) {}
 let best = 0; try { best = +localStorage.getItem('frog_best') || 0; } catch (e) {}
@@ -192,14 +201,41 @@ function press(e) {
   if (e && e.preventDefault) e.preventDefault();
   if (gated) return;
   audio();
-  if (state === 'menu' && e.clientX !== undefined) {   // 5 taps on the version label toggles the debug readout
-    const q = hudPt(e);
-    if (q.y > H * 2 - 40 - SAFEB && Math.abs(q.x - W) < 50) { if (performance.now() - dbgT > 1200) dbgTaps = 0; dbgT = performance.now(); if (++dbgTaps >= 5) { debugOn = !debugOn; dbgTaps = 0; try { localStorage.setItem('frog_debug', debugOn ? '1' : '0'); } catch (err) {} } return; }
-  }
-  if (hitMute(e)) { muted = !muted; try { localStorage.setItem('frog_mute', muted ? '1' : '0'); } catch (err) {} if (!muted) sfxClick(); return; }
-  if (state === 'menu') { if (hitBtn(e)) { state = 'play'; p.buf = 0; sfxClick(); } return; }
-  if (dead) { if (deadT > 0.5 && hitBtn(e)) { reset(); sfxClick(); } return; }
+  const kb = !e || e.clientX === undefined;           // keyboard
+  if (state === 'menu') { if (kb) startGame(); return; }
+  if (dead) { if (kb && deadT > 0.5) replayGame(); return; }
   p.buf = 0.12;
+}
+function startGame() { if (state === 'menu' && !gated) { state = 'play'; p.buf = 0; sfxClick(); } }
+function replayGame() { if (dead && deadT > 0.5 && !gated) { reset(); sfxClick(); } }
+function toggleMute() { audio(); muted = !muted; try { localStorage.setItem('frog_mute', muted ? '1' : '0'); } catch (err) {} if (!muted) sfxClick(); }
+const bStart = document.getElementById('bStart'), bReplay = document.getElementById('bReplay'), bMute = document.getElementById('bMute'), verEl = document.getElementById('ver');
+bStart.addEventListener('click', e => { e.preventDefault(); audio(); startGame(); });
+bReplay.addEventListener('click', e => { e.preventDefault(); audio(); replayGame(); });
+bMute.addEventListener('click', e => { e.preventDefault(); toggleMute(); });
+verEl.addEventListener('click', () => {                 // 5 taps on the version label toggles the debug readout
+  if (performance.now() - dbgT > 1200) dbgTaps = 0; dbgT = performance.now();
+  if (++dbgTaps >= 5) { debugOn = !debugOn; dbgTaps = 0; try { localStorage.setItem('frog_debug', debugOn ? '1' : '0'); } catch (err) {} }
+});
+// place the DOM buttons over the canvas (positions follow the canvas's real on-screen rect)
+const lastPos = new Map();
+function placeBtn(el, show, x, y, w, h, font, r, sc) {
+  const disp = show ? 'block' : 'none';
+  if (el.style.display !== disp) el.style.display = disp;
+  if (!show) return;
+  const key = [r.left, r.top, sc, x, y].join('|');
+  if (lastPos.get(el) === key) return; lastPos.set(el, key);
+  el.style.left = Math.round(r.left + x * sc) + 'px'; el.style.top = Math.round(r.top + y * sc) + 'px';
+  el.style.width = Math.round(w * sc) + 'px'; el.style.height = Math.round(h * sc) + 'px'; el.style.fontSize = Math.max(10, Math.round(font * sc)) + 'px';
+}
+function layoutUI() {
+  const r = cv.getBoundingClientRect(), sc = r.width / (W * 2), menuB = { y: Math.round(H * 1.1) + 40 }, deadB = { y: 440 + (H - 350) - 30 };
+  placeBtn(bStart, state === 'menu' && !gated, W - 120, menuB.y, 240, 60, 26, r, sc);
+  placeBtn(bReplay, dead && deadT > 0.5 && !gated, W - 120, deadB.y, 240, 60, 26, r, sc);
+  placeBtn(bMute, !gated, MUTE.x, MUTE.y + SAFE, MUTE.w, MUTE.h, 20, r, sc);
+  bMute.classList.toggle('muted', muted);
+  const showVer = state === 'menu' && !gated; if (showVer && verEl.textContent !== 'Phiên bản ' + VERSION) verEl.textContent = 'Phiên bản ' + VERSION;
+  const vd = showVer ? 'block' : 'none'; if (verEl.style.display !== vd) verEl.style.display = vd;
 }
 function release(e) {
   if (e && e.preventDefault) e.preventDefault();
@@ -532,9 +568,6 @@ function draw() {
     ctx.fillStyle = 'rgb(' + rnd(lerp(120, 255, fr2)) + ',' + rnd(lerp(230, 90, fr2)) + ',80)'; ctx.fillRect(bx, 32, 104 * fr2 + 2, 6);
     ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
   }
-  ctx.fillStyle = 'rgba(27,58,75,.75)'; ctx.fillRect(MUTE.x, MUTE.y, MUTE.w, MUTE.h);
-  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 20px "Courier New",monospace'; ctx.fillText('♪', MUTE.x + MUTE.w / 2, MUTE.y + 21);
-  if (muted) { ctx.strokeStyle = '#ff6b5e'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(MUTE.x + 3, MUTE.y + MUTE.h - 3); ctx.lineTo(MUTE.x + MUTE.w - 3, MUTE.y + 3); ctx.stroke(); }
   ctx.textAlign = 'left';
   ctx.translate(0, -SAFE);
   ctx.textAlign = 'center';
@@ -556,7 +589,7 @@ function draw() {
     ctx.fillStyle = '#1b3a4b'; ctx.font = 'bold 26px "Courier New",monospace'; ctx.textAlign = 'center'; ctx.fillText(label, B.x + B.w / 2, B.y + B.h / 2 + 9);
   };
   ctx.globalAlpha = 0.9; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 4; ctx.textAlign = 'center'; ctx.font = 'bold 14px "Courier New",monospace';
-  if (state === 'menu') { T('Phiên bản ' + VERSION, W, H * 2 - 12 - SAFEB); if (performance.now() < updatedUntil) { ctx.globalAlpha = 1; ctx.font = 'bold 18px "Courier New",monospace'; ctx.fillStyle = '#ffd84a'; T('✦ Đã cập nhật lên ' + VERSION + ' ✦', W, 120 + SAFE); ctx.fillStyle = '#fff'; } }
+  if (state === 'menu') { if (performance.now() < updatedUntil) { ctx.globalAlpha = 1; ctx.font = 'bold 18px "Courier New",monospace'; ctx.fillStyle = '#ffd84a'; T('✦ Đã cập nhật lên ' + VERSION + ' ✦', W, 120 + SAFE); ctx.fillStyle = '#fff'; } }
   if (debugOn) {
     ctx.textAlign = 'left'; ctx.globalAlpha = 1; ctx.fillStyle = '#ff0'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
     const lines = [VERSION, ...DBG, 'canvas ' + cv.style.width + ' x ' + cv.style.height];
@@ -568,7 +601,6 @@ function draw() {
     ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 8;
     ctx.font = 'bold 54px "Courier New",monospace'; T('ẾCH', W, H - 110); T('NHẢY SEN', W, H - 50);
     ctx.font = 'bold 15px "Courier New",monospace'; ctx.lineWidth = 5; T('Leo thật cao trên những cuống sen', W, H - 10);
-    button('▶ BẮT ĐẦU');
   }
   if (dead) {
     ctx.fillStyle = 'rgba(10,30,50,.45)'; ctx.fillRect(0, 0, W * 2, H * 2); ctx.save(); ctx.translate(0, H - 350);
@@ -577,7 +609,6 @@ function draw() {
     ctx.font = 'bold 34px "Courier New",monospace'; T(score + ' m', W, 330);
     ctx.font = 'bold 18px "Courier New",monospace'; T((score >= best && score > 0 ? '🏆 KỶ LỤC MỚI! ' : '') + 'BEST ' + best + ' m', W, 366);
     ctx.restore();
-    if (deadT > 0.5) button('↻ CHƠI LẠI');
   }
   ctx.restore();
 }
@@ -591,7 +622,7 @@ function loop(n) {
   if (mqLand.matches) { lt = n; requestAnimationFrame(loop); return; }
   acc += Math.min((n - lt) / 1000, 0.05); lt = n;
   while (acc >= STEP) { update(STEP); acc -= STEP; }
-  draw(); requestAnimationFrame(loop);
+  draw(); layoutUI(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 // ---- install gate: on a phone, the web link must be added to the home screen first ----
