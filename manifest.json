@@ -1,0 +1,17 @@
+{
+  "name": "Ếch Nhảy Sen",
+  "short_name": "Ếch Sen",
+  "description": "Game mobile: ếch nhảy lá sen, leo càng cao càng tốt.",
+  "lang": "vi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16303f",
+  "theme_color": "#16303f",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
