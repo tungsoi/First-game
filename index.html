@@ -69,6 +69,7 @@ if (window.visualViewport) visualViewport.addEventListener('resize', fit);
 fit(); addEventListener('load', () => { fit(); setTimeout(fit, 300); });
 
 const SPEED = 107, MAXSPD = 200, ACC = 0.025, WATER = 14, G = 900, JV = 320, CUT = 0.42, PX = 55;
+const VERSION = 'v1.4';
 let best = 0; try { best = +localStorage.getItem('frog_best') || 0; } catch (e) {}
 const R = (a, c) => a + Math.random() * (c - a);
 const RI = (a, c) => Math.floor(R(a, c + 1));
@@ -524,6 +525,14 @@ function draw() {
     ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 4; ctx.strokeRect(B.x, B.y, B.w, B.h);
     ctx.fillStyle = '#1b3a4b'; ctx.font = 'bold 26px "Courier New",monospace'; ctx.textAlign = 'center'; ctx.fillText(label, B.x + B.w / 2, B.y + B.h / 2 + 9);
   };
+  ctx.globalAlpha = 0.6; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 12px "Courier New",monospace';
+  if (state === 'menu') ctx.fillText(VERSION, W, H * 2 - 10);
+  if (location.search.indexOf('debug') >= 0) {
+    ctx.textAlign = 'left'; ctx.globalAlpha = 1; ctx.fillStyle = '#ff0'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
+    const lines = [VERSION, 'inner ' + innerWidth + 'x' + innerHeight, 'screen ' + screen.width + 'x' + screen.height, 'probe ' + probeFull.offsetHeight + ' doc ' + document.documentElement.clientHeight, 'W' + W + ' H' + H + ' SC' + SC + ' SAFE' + Math.round(SAFE), 'canvas ' + cv.style.width + ' x ' + cv.style.height];
+    lines.forEach((t, i) => { ctx.strokeText(t, 12, 130 + i * 16); ctx.fillText(t, 12, 130 + i * 16); });
+  }
+  ctx.globalAlpha = 1; ctx.textAlign = 'left';
   if (state === 'menu') {
     ctx.fillStyle = 'rgba(10,30,50,.35)'; ctx.fillRect(0, 0, W * 2, H * 2);
     ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 8;
@@ -582,7 +591,8 @@ requestAnimationFrame(loop);
   addEventListener('bipready', () => { if (gated) render(); });
   addEventListener('appinstalled', () => { el.innerHTML = head + '<p>Đã cài xong! 🎉</p><p>Hãy mở game bằng icon ếch trên màn hình chính.</p>'; });
 })();
-if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) addEventListener('load', () => navigator.serviceWorker.register('sw.js').then(r => r.update()).catch(() => {}));
+if ('serviceWorker' in navigator && navigator.serviceWorker.controller) { let rl = false; navigator.serviceWorker.addEventListener('controllerchange', () => { if (!rl) { rl = true; location.reload(); } }); }
 </script>
 </body>
 </html>
