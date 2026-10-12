@@ -13,8 +13,11 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <title>Ếch Nhảy Sen</title>
 <style>
-  html,body{margin:0;height:100%;background:#16303f;overflow:hidden;overscroll-behavior:none;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:#16303f;overscroll-behavior:none;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
   canvas{display:block;position:fixed;top:0;left:50%;transform:translateX(-50%);image-rendering:pixelated}
+  #rot{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:#122836;color:#fff;text-align:center;font:bold 18px/1.4 "Courier New",monospace}
+  #rot span{font-size:44px}
+  @media (orientation:landscape) and (pointer:coarse) and (max-height:500px){#rot{display:flex}}
   #gate{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;color:#fff;background:#122836;font:bold 17px/1.45 "Courier New",monospace;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom));touch-action:manipulation}
   #gate.show{display:flex}
   #gate img{width:96px;height:96px;image-rendering:pixelated;border:4px solid #1b3a4b;border-radius:18px}
@@ -35,6 +38,7 @@ addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__bip 
 </head>
 <body>
 <div id="gate"></div>
+<div id="rot"><span>📱↻</span>Xoay dọc màn hình để chơi</div>
 <canvas id="c"></canvas>
 <script>
 // ---- low-res pixel buffer (1 game px = 2 screen px) ----
@@ -43,33 +47,39 @@ const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const bf = document.createElement('canvas');
 const b = bf.getContext('2d', { willReadFrequently: true });
 let SC = 2, SAFE = 0, bgN = 0;
-const probe = document.createElement('div');
-probe.style.cssText = 'position:fixed;top:0;left:0;width:0;padding-top:env(safe-area-inset-top);visibility:hidden';
-document.body.appendChild(probe);
-// full-height probe: in iOS standalone innerHeight can stop short of the home-indicator area
-const probeFull = document.createElement('div');
-probeFull.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:100vh;visibility:hidden;pointer-events:none';
-document.body.appendChild(probeFull);
+let debugOn = location.search.indexOf('debug') >= 0, dbgTaps = 0, dbgT = 0;
+try { if (localStorage.getItem('frog_debug') === '1') debugOn = true; } catch (e) {}
+// probes for the safe areas and every flavour of "viewport height" (browsers disagree, esp. iOS standalone)
+const mkProbe = css => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;top:0;left:0;width:1px;visibility:hidden;pointer-events:none;' + css; document.body.appendChild(d); return d; };
+const probe = mkProbe('padding-top:env(safe-area-inset-top)'), probeB = mkProbe('padding-bottom:env(safe-area-inset-bottom)');
+const probeV = mkProbe('height:100vh'), probeD = mkProbe('height:100dvh'), probeL = mkProbe('height:100lvh');
+let SAFEB = 0, DBG = [];
 function fit() {
-  const dpr = window.devicePixelRatio || 1, dw = innerWidth * dpr;
-  const st = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-  const fullH = Math.max(innerHeight, probeFull.offsetHeight, document.documentElement.clientHeight, st && screen.height > screen.width ? screen.height : 0);
-  const dh = fullH * dpr;
-  const aw = Math.min(dw, dh * 0.6);
+  const dpr = window.devicePixelRatio || 1, vv = window.visualViewport;
+  const st = matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+  // inside a browser tab use the visible height; as an installed app also trust the larger "full" measures
+  let fullH = Math.max(innerHeight, vv ? vv.height : 0, probeD.offsetHeight);
+  if (st) fullH = Math.max(fullH, probeV.offsetHeight, probeL.offsetHeight, document.documentElement.clientHeight, screen.height > screen.width ? screen.height : 0);
+  const fullW = Math.max(innerWidth, document.documentElement.clientWidth);
+  const dw = fullW * dpr, dh = fullH * dpr;
+  const aw = Math.min(dw, dh * 0.6);               // phones: full width. Tablets / desktop: a centred portrait column
   SC = Math.max(1, Math.round(aw / 200));
   W = Math.ceil(aw / SC); H = Math.ceil(dh / SC); CAMY0 = -H * 0.55;
   bf.width = W; bf.height = H;
   cv.width = W * SC; cv.height = H * SC;
   cv.style.width = (W * SC / dpr) + 'px'; cv.style.height = (H * SC / dpr) + 'px';
-  SAFE = probe.offsetHeight * dpr * 2 / SC;
+  SAFE = probe.offsetHeight * dpr * 2 / SC; SAFEB = probeB.offsetHeight * dpr * 2 / SC;
+  DBG = ['standalone ' + st + ' dpr ' + dpr, 'inner ' + innerWidth + 'x' + innerHeight + ' vv ' + (vv ? Math.round(vv.height) : '-'), 'screen ' + screen.width + 'x' + screen.height, 'vh ' + probeV.offsetHeight + ' dvh ' + probeD.offsetHeight + ' lvh ' + probeL.offsetHeight, 'W' + W + ' H' + H + ' SC' + SC + ' top' + Math.round(SAFE) + ' bot' + Math.round(SAFEB)];
   ctx.imageSmoothingEnabled = false;
 }
-addEventListener('resize', fit); addEventListener('orientationchange', () => setTimeout(fit, 250));
+addEventListener('resize', fit); addEventListener('orientationchange', () => { setTimeout(fit, 250); setTimeout(fit, 800); });
+addEventListener('pageshow', fit); document.addEventListener('visibilitychange', () => { if (!document.hidden) fit(); });
 if (window.visualViewport) visualViewport.addEventListener('resize', fit);
-fit(); addEventListener('load', () => { fit(); setTimeout(fit, 300); });
+if (window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElement);
+fit(); addEventListener('load', () => { fit(); setTimeout(fit, 300); setTimeout(fit, 1200); });
 
 const SPEED = 107, MAXSPD = 200, ACC = 0.025, WATER = 14, G = 900, JV = 320, CUT = 0.42, PX = 55;
-const VERSION = 'v1.5';
+const VERSION = 'v1.6';
 let best = 0; try { best = +localStorage.getItem('frog_best') || 0; } catch (e) {}
 const R = (a, c) => a + Math.random() * (c - a);
 const RI = (a, c) => Math.floor(R(a, c + 1));
@@ -177,6 +187,10 @@ function press(e) {
   if (e && e.preventDefault) e.preventDefault();
   if (gated) return;
   audio();
+  if (state === 'menu' && e.clientX !== undefined) {   // 5 taps on the version label toggles the debug readout
+    const q = hudPt(e);
+    if (q.y > H * 2 - 40 - SAFEB && Math.abs(q.x - W) < 50) { if (performance.now() - dbgT > 1200) dbgTaps = 0; dbgT = performance.now(); if (++dbgTaps >= 5) { debugOn = !debugOn; dbgTaps = 0; try { localStorage.setItem('frog_debug', debugOn ? '1' : '0'); } catch (err) {} } return; }
+  }
   if (hitMute(e)) { muted = !muted; try { localStorage.setItem('frog_mute', muted ? '1' : '0'); } catch (err) {} if (!muted) sfxClick(); return; }
   if (state === 'menu') { if (hitBtn(e)) { state = 'play'; p.buf = 0; sfxClick(); } return; }
   if (dead) { if (deadT > 0.5 && hitBtn(e)) { reset(); sfxClick(); } return; }
@@ -516,7 +530,7 @@ function draw() {
   }
   if (state === 'play' && !dead && jumps < 4) {
     ctx.font = 'bold 16px "Courier New",monospace';
-    T('Chạm để nhảy – giữ lâu nhảy cao hơn', W, H * 2 - 70); T('Leo lên những cuống sen cao dần!', W, H * 2 - 46);
+    T('Chạm để nhảy – giữ lâu nhảy cao hơn', W, H * 2 - 70 - SAFEB); T('Leo lên những cuống sen cao dần!', W, H * 2 - 46 - SAFEB);
   }
   const button = label => {
     const B = btnRect();
@@ -528,10 +542,10 @@ function draw() {
     ctx.fillStyle = '#1b3a4b'; ctx.font = 'bold 26px "Courier New",monospace'; ctx.textAlign = 'center'; ctx.fillText(label, B.x + B.w / 2, B.y + B.h / 2 + 9);
   };
   ctx.globalAlpha = 0.6; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 12px "Courier New",monospace';
-  if (state === 'menu') ctx.fillText(VERSION, W, H * 2 - 10);
-  if (location.search.indexOf('debug') >= 0) {
+  if (state === 'menu') ctx.fillText(VERSION, W, H * 2 - 10 - SAFEB);
+  if (debugOn) {
     ctx.textAlign = 'left'; ctx.globalAlpha = 1; ctx.fillStyle = '#ff0'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
-    const lines = [VERSION, 'inner ' + innerWidth + 'x' + innerHeight, 'screen ' + screen.width + 'x' + screen.height, 'probe ' + probeFull.offsetHeight + ' doc ' + document.documentElement.clientHeight, 'W' + W + ' H' + H + ' SC' + SC + ' SAFE' + Math.round(SAFE), 'canvas ' + cv.style.width + ' x ' + cv.style.height];
+    const lines = [VERSION, ...DBG, 'canvas ' + cv.style.width + ' x ' + cv.style.height];
     lines.forEach((t, i) => { ctx.strokeText(t, 12, 130 + i * 16); ctx.fillText(t, 12, 130 + i * 16); });
   }
   ctx.globalAlpha = 1; ctx.textAlign = 'center';
@@ -556,9 +570,11 @@ function draw() {
 function hex2(c) { const m = c.match(/\d+/g).map(Number); return m; }
 
 reset(); state = 'menu';
+const mqLand = matchMedia('(orientation: landscape) and (pointer: coarse) and (max-height: 500px)');
 let lt = performance.now(), acc = 0;
 const STEP = 1 / 120;
 function loop(n) {
+  if (mqLand.matches) { lt = n; requestAnimationFrame(loop); return; }
   acc += Math.min((n - lt) / 1000, 0.05); lt = n;
   while (acc >= STEP) { update(STEP); acc -= STEP; }
   draw(); requestAnimationFrame(loop);
