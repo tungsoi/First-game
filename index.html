@@ -41,8 +41,8 @@ addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__bip 
 let W = 200, H = 350, CAMY0 = -H * 0.55;
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const bf = document.createElement('canvas');
-const b = bf.getContext('2d');
-let SC = 2, SAFE = 0;
+const b = bf.getContext('2d', { willReadFrequently: true });
+let SC = 2, SAFE = 0, bgN = 0;
 const probe = document.createElement('div');
 probe.style.cssText = 'position:fixed;top:0;left:0;width:0;padding-top:env(safe-area-inset-top);visibility:hidden';
 document.body.appendChild(probe);
@@ -69,7 +69,7 @@ if (window.visualViewport) visualViewport.addEventListener('resize', fit);
 fit(); addEventListener('load', () => { fit(); setTimeout(fit, 300); });
 
 const SPEED = 107, MAXSPD = 200, ACC = 0.025, WATER = 14, G = 900, JV = 320, CUT = 0.42, PX = 55;
-const VERSION = 'v1.4';
+const VERSION = 'v1.5';
 let best = 0; try { best = +localStorage.getItem('frog_best') || 0; } catch (e) {}
 const R = (a, c) => a + Math.random() * (c - a);
 const RI = (a, c) => Math.floor(R(a, c + 1));
@@ -487,6 +487,8 @@ function draw() {
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, cv.width, cv.height);
   ctx.drawImage(bf, 0, 0, cv.width, cv.height);
+  // keep the page background equal to the scene's bottom colour: any strip iOS leaves uncovered blends in
+  if ((bgN++ & 7) === 0) { const d = b.getImageData(W >> 1, H - 1, 1, 1).data, c = 'rgb(' + d[0] + ',' + d[1] + ',' + d[2] + ')'; document.documentElement.style.background = c; document.body.style.background = c; }
   // HUD
   const u = SC / 2;
   ctx.save(); ctx.scale(u, u);
@@ -532,7 +534,7 @@ function draw() {
     const lines = [VERSION, 'inner ' + innerWidth + 'x' + innerHeight, 'screen ' + screen.width + 'x' + screen.height, 'probe ' + probeFull.offsetHeight + ' doc ' + document.documentElement.clientHeight, 'W' + W + ' H' + H + ' SC' + SC + ' SAFE' + Math.round(SAFE), 'canvas ' + cv.style.width + ' x ' + cv.style.height];
     lines.forEach((t, i) => { ctx.strokeText(t, 12, 130 + i * 16); ctx.fillText(t, 12, 130 + i * 16); });
   }
-  ctx.globalAlpha = 1; ctx.textAlign = 'left';
+  ctx.globalAlpha = 1; ctx.textAlign = 'center';
   if (state === 'menu') {
     ctx.fillStyle = 'rgba(10,30,50,.35)'; ctx.fillRect(0, 0, W * 2, H * 2);
     ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b3a4b'; ctx.lineWidth = 8;
