@@ -1,5 +1,5 @@
 // Offline cache for Ếch Nhảy Sen. Bump CACHE when shipping a new version.
-const CACHE = 'frog-v2';
+const CACHE = 'frog-v3';
 const CORE = ['./', 'index.html', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

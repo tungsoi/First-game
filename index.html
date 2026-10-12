@@ -14,7 +14,7 @@
 <title>Ếch Nhảy Sen</title>
 <style>
   html,body{margin:0;height:100%;background:#16303f;overflow:hidden;overscroll-behavior:none;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
-  canvas{display:block;margin:0 auto;image-rendering:pixelated}
+  canvas{display:block;position:fixed;top:0;left:50%;transform:translateX(-50%);image-rendering:pixelated}
   #gate{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;color:#fff;background:#122836;font:bold 17px/1.45 "Courier New",monospace;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom));touch-action:manipulation}
   #gate.show{display:flex}
   #gate img{width:96px;height:96px;image-rendering:pixelated;border:4px solid #1b3a4b;border-radius:18px}
@@ -46,8 +46,15 @@ let SC = 2, SAFE = 0;
 const probe = document.createElement('div');
 probe.style.cssText = 'position:fixed;top:0;left:0;width:0;padding-top:env(safe-area-inset-top);visibility:hidden';
 document.body.appendChild(probe);
+// full-height probe: in iOS standalone innerHeight can stop short of the home-indicator area
+const probeFull = document.createElement('div');
+probeFull.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:100vh;visibility:hidden;pointer-events:none';
+document.body.appendChild(probeFull);
 function fit() {
-  const dpr = window.devicePixelRatio || 1, dw = innerWidth * dpr, dh = innerHeight * dpr;
+  const dpr = window.devicePixelRatio || 1, dw = innerWidth * dpr;
+  const st = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const fullH = Math.max(innerHeight, probeFull.offsetHeight, document.documentElement.clientHeight, st && screen.height > screen.width ? screen.height : 0);
+  const dh = fullH * dpr;
   const aw = Math.min(dw, dh * 0.6);
   SC = Math.max(1, Math.round(aw / 200));
   W = Math.ceil(aw / SC); H = Math.ceil(dh / SC); CAMY0 = -H * 0.55;
@@ -57,7 +64,9 @@ function fit() {
   SAFE = probe.offsetHeight * dpr * 2 / SC;
   ctx.imageSmoothingEnabled = false;
 }
-addEventListener('resize', fit); fit();
+addEventListener('resize', fit); addEventListener('orientationchange', () => setTimeout(fit, 250));
+if (window.visualViewport) visualViewport.addEventListener('resize', fit);
+fit(); addEventListener('load', () => { fit(); setTimeout(fit, 300); });
 
 const SPEED = 107, MAXSPD = 200, ACC = 0.025, WATER = 14, G = 900, JV = 320, CUT = 0.42, PX = 55;
 let best = 0; try { best = +localStorage.getItem('frog_best') || 0; } catch (e) {}
