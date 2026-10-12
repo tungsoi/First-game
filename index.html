@@ -15,9 +15,26 @@
 <style>
   html,body{margin:0;height:100%;background:#16303f;overflow:hidden;overscroll-behavior:none;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
   canvas{display:block;margin:0 auto;image-rendering:pixelated}
+  #gate{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;color:#fff;background:#122836;font:bold 17px/1.45 "Courier New",monospace;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom));touch-action:manipulation}
+  #gate.show{display:flex}
+  #gate img{width:96px;height:96px;image-rendering:pixelated;border:4px solid #1b3a4b;border-radius:18px}
+  #gate h1{margin:0;font-size:26px;line-height:1.2;text-shadow:2px 2px 0 #1b3a4b}
+  #gate p{margin:0;max-width:320px}
+  #gate ol{margin:0;padding:0;list-style:none;max-width:320px;text-align:left;counter-reset:s}
+  #gate li{counter-increment:s;margin:8px 0;padding-left:34px;position:relative}
+  #gate li::before{content:counter(s);position:absolute;left:0;top:-1px;width:24px;height:24px;border-radius:50%;background:#ffd84a;color:#1b3a4b;text-align:center;line-height:24px}
+  #gate button{font:inherit;font-size:20px;color:#1b3a4b;background:#ffd84a;border:4px solid #1b3a4b;box-shadow:4px 6px 0 #1b3a4b;padding:12px 26px;border-radius:0;margin-top:6px}
+  #gate button:active{transform:translate(2px,3px);box-shadow:2px 3px 0 #1b3a4b}
+  #gate small{opacity:.75;font-size:13px;max-width:300px}
 </style>
+<script>
+// capture Android's install prompt as early as possible
+window.__bip = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__bip = e; dispatchEvent(new Event('bipready')); });
+</script>
 </head>
 <body>
+<div id="gate"></div>
 <canvas id="c"></canvas>
 <script>
 // ---- low-res pixel buffer (1 game px = 2 screen px) ----
@@ -63,7 +80,7 @@ const mix = (a, c, k) => `rgb(${rnd(lerp(a[0], c[0], k))},${rnd(lerp(a[1], c[1],
 const hash = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >> 13)) * 1274126177 | 0; return ((h ^ (h >> 16)) >>> 0) / 4294967296; };
 
 // ---- game state ----
-let state = 'play', plats, fish, p, camX, camY, refY, lastEnd, lastY, speed, t, clock = 0, score, dead, deadT, jumps, parts, shake;
+let gated = false, state = 'play', plats, fish, p, camX, camY, refY, lastEnd, lastY, speed, t, clock = 0, score, dead, deadT, jumps, parts, shake;
 
 function reset() {
   plats = [{ ground: true, x: -300, w: 400, y: 0, L: 0 }];
@@ -148,6 +165,7 @@ function hitBtn(e) {
 }
 function press(e) {
   if (e && e.preventDefault) e.preventDefault();
+  if (gated) return;
   audio();
   if (hitMute(e)) { muted = !muted; try { localStorage.setItem('frog_mute', muted ? '1' : '0'); } catch (err) {} if (!muted) sfxClick(); return; }
   if (state === 'menu') { if (hitBtn(e)) { state = 'play'; p.buf = 0; sfxClick(); } return; }
@@ -526,6 +544,35 @@ function loop(n) {
   draw(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+// ---- install gate: on a phone, the web link must be added to the home screen first ----
+(function () {
+  const q = new URLSearchParams(location.search), ua = navigator.userAgent;
+  const standalone = matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+  const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const mobile = ios || (/Android/i.test(ua) && matchMedia('(pointer: coarse)').matches);
+  const embedded = window.self !== window.top;
+  const need = q.get('gate') === '1' || (mobile && !standalone && !embedded && q.get('dev') !== '1');
+  if (!need) return;
+  const el = document.getElementById('gate'), inApp = /FBAN|FBAV|Zalo|Instagram|Line\/|MicroMessenger/i.test(ua);
+  const head = '<img src="icons/icon-192.png" alt=""><h1>Ếch Nhảy Sen</h1>';
+  function render() {
+    let body;
+    if (inApp) body = '<p>Bạn đang mở link trong ứng dụng khác.</p><ol><li>Bấm menu <b>⋯</b> hoặc <b>⋮</b> ở góc màn hình</li><li>Chọn <b>Mở bằng ' + (ios ? 'Safari' : 'Chrome') + '</b></li><li>Rồi thêm game vào màn hình chính</li></ol>';
+    else if (ios) body = '<p>Để chơi, hãy thêm game vào màn hình chính:</p><ol><li>Mở link bằng <b>Safari</b>, bấm nút <b>Chia sẻ ⬆︎</b> ở thanh dưới</li><li>Chọn <b>Thêm vào Màn hình chính</b></li><li>Mở game từ icon ếch trên màn hình chính</li></ol>';
+    else if (window.__bip) body = '<p>Cài game vào màn hình chính để chơi toàn màn hình, không cần mạng.</p><button id="gateInstall">Cài đặt ngay</button>';
+    else body = '<p>Để chơi, hãy thêm game vào màn hình chính:</p><ol><li>Bấm menu <b>⋮</b> của Chrome</li><li>Chọn <b>Cài đặt ứng dụng</b> hoặc <b>Thêm vào màn hình chính</b></li><li>Mở game từ icon ếch trên màn hình chính</li></ol>';
+    el.innerHTML = head + body + '<small>Sau khi cài, hãy mở game bằng icon trên màn hình chính.</small>';
+    const b = document.getElementById('gateInstall');
+    if (b) b.onclick = async () => {
+      const ev = window.__bip; if (!ev) return; ev.prompt();
+      const r = await ev.userChoice.catch(() => ({})); window.__bip = null;
+      if (r.outcome === 'accepted') el.innerHTML = head + '<p>Đã cài xong! 🎉</p><p>Hãy mở game bằng icon ếch trên màn hình chính.</p>'; else render();
+    };
+  }
+  gated = true; el.classList.add('show'); render();
+  addEventListener('bipready', () => { if (gated) render(); });
+  addEventListener('appinstalled', () => { el.innerHTML = head + '<p>Đã cài xong! 🎉</p><p>Hãy mở game bằng icon ếch trên màn hình chính.</p>'; });
+})();
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 </script>
 </body>
